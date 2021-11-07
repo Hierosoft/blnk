@@ -1,0 +1,7 @@
+Content-Type: text/blnk
+Type:Application
+NoDisplay:true
+Terminal:false
+Name:This is a test of paths that don't exist.
+Encoding:UTF-8
+Exec:C:\this\path\does\not\exist

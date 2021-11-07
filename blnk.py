@@ -4,6 +4,16 @@ import os
 import platform
 import subprocess
 
+verbose = False
+
+def error(msg):
+    sys.stderr.write("{}\n".format(msg))
+    sys.stderr.flush()
+
+def debug(msg):
+    if verbose:
+        error(msg)
+
 blnkTemplate = '''Content-Type: text/blnk
 Encoding:UTF-8
 Type:{Type}
@@ -68,27 +78,104 @@ class FileTypeError(Exception):
 profile = None
 
 myDirName = "blnk"
-AppDatas = None
+AppsData = None
 local = None
 myLocal = None
 shortcutsDir = None
+replacements = None
+username = None
+profiles = None
 if platform.system() == "Windows":
+    username = os.environ.get("USERNAME")
     profile = os.environ.get("USERPROFILE")
-    tmp = os.path.join(profile, "AppData")
-    AppDatas = os.path.join(tmp, "Roaming")
-    local = os.path.join(tmp, "Local")
+    _unused_ = os.path.join(profile, "AppData")
+    AppsData = os.path.join(_unused_, "Roaming")
+    local = os.path.join(_unused_, "Local")
     share = local
     myShare = os.path.join(local, myDirName)
     shortcutsDir = os.path.join(profile, "Desktop")
     dtPath = os.path.join(shortcutsDir, "blnk.blnk")
+    profiles = os.environ.get("PROFILESFOLDER")
+    temporaryFiles = os.path.join(local, "Temp")
 else:
+    username = os.environ.get("USER")
     profile = os.environ.get("HOME")
-    AppDatas = os.path.join(profile, ".config")
+    AppsData = os.path.join(profile, ".config")
     local = os.path.join(profile, ".local")
     share = os.path.join(local, "share")
     myShare = os.path.join(share, "blnk")
     shortcutsDir = os.path.join(share, "applications")
     dtPath = os.path.join(shortcutsDir, "blnk.desktop")
+    if platform.system() == "Darwin":
+        profiles = "/Users"
+    else:
+        profiles = "/home"
+    temporaryFiles = "/tmp"
+
+statedCloud = "owncloud"
+myCloud = "owncloud"
+if os.path.isdir(os.path.join(profile, "Nextcloud")):
+    myCloud = "Nextcloud"
+
+# NOTE: PATH isn't necessary to split with os.pathsep (such as ":", not
+# os.sep or os.path.sep such as "/") since sys.path is split already.
+
+# The replacements are mixed since the blnk file may have come from
+#   another OS:
+substitutions = {
+    "%USER%": username,
+    "%USERPROFILE%": profile,
+    "%PROFILESFOLDER%": profiles,
+    "%MYDOCS%": os.path.join(profile, "Documents"),
+    "%MYDOCUMENTS%": os.path.join(profile, "Documents"),
+    "%APPDATA%": AppsData,
+    "%LOCALAPPDATA%": local,
+    "%TEMP%": temporaryFiles,
+    "%MYDOCS%": os.path.join(profile, "Documents"),
+    "%APPDATA%": AppsData,
+    "$USER": username,
+    "$HOME": profile,
+    "~": profile,
+}
+
+def replace_isolated(path, old, new, case_sensitive=True):
+    '''
+    Replace old only if it is at the start or end of a path or is
+    surrounded by os.path.sep.
+    '''
+    if case_sensitive:
+        if path.startswith(old):
+            path = new + path[len(old):]
+        elif path.endswith(old):
+            path = path[:-len(old)] + new
+        else:
+            wrappedNew = os.path.sep + new + os.path.sep
+            wrappedOld = os.path.sep + old + os.path.sep
+            path = path.replace(wrappedOld, wrappedNew)
+    else:
+        if path.lower().startswith(old.lower()):
+            path = new + path[len(old):]
+        elif path.lower().endswith(old.lower()):
+            path = path[:-len(old)] + new
+        else:
+            wrappedNew = os.path.sep + new + os.path.sep
+            wrappedOld = os.path.sep + old + os.path.sep
+            at = 0
+            while at >= 0:
+                at = path.lower().find(old.lower())
+                if at < 0:
+                    break
+                restI = at + len(old)
+                path = path[:at] + new + path[restI:]
+    return path
+
+def replace_vars(path):
+    for old,new in substitutions.items():
+        if old.startswith("%") and old.endswith("%"):
+            path = path.replace(old, new)
+        else:
+            path = replace_isolated(path, old, new)
+    return path
 
 myBinPath = __file__
 tryBinPath = os.path.join(local, "bin", "blnk")
@@ -96,7 +183,16 @@ if os.path.isfile(tryBinPath):
     myBinPath = tryBinPath
 
 class BLink:
+    '''
+    BASES is a list of paths that could contain the directory if the
+    directory is a drive letter that is not C but the os is not Windows.
+    '''
     NO_SECTION = "\n"
+    BASES = [
+        os.path.join(profile, myCloud),
+        profile,
+    ]
+    USERS_DIRS = ["Users", "Documents and Settings"]
 
     def __init__(self, path, assignmentOperator=":",
                  commentDelimiter="#"):
@@ -125,7 +221,7 @@ class BLink:
         k = line[:i].strip()
         v = line[i+len(self.assignmentOperator):].strip()
         if self.commentDelimiter in v:
-            print("WARNING: `{}` contains a comment delimiter '{}'"
+            error("WARNING: `{}` contains a comment delimiter '{}'"
                   " but inline comments are not supported."
                   "".format(line, self.commentDelimiter))
         return (k, v)
@@ -150,7 +246,7 @@ class BLink:
         '''
         if row is None:
             if self.lastSection is not None:
-                print("WARNING: The line `{}` was a custom line not on"
+                error("WARNING: The line `{}` was a custom line not on"
                       " a row of a file, but it will be placed in the"
                       " \"{}\" section which was still present."
                       "".format(line, self.lastSection))
@@ -163,7 +259,7 @@ class BLink:
                     " _pushLine got \"{}\" (last file: {})"
                     "".format(line, self.path)
                 )
-                print("* running file directly...")
+                error("* running file directly...")
         trySection = self.getSection(line)
         if self.isComment(line):
             pass
@@ -199,18 +295,26 @@ class BLink:
 
     def load(self, path):
         self.path = path
-        with open(path, 'r') as ins:
-            row = 0
-            for line in ins:
-                row += 1
-                try:
-                    self._pushLine(line, row=row)
-                except FileTypeError as ex:
-                    print(str(ex))
-                    print("* running file directly...")
-                    self._choose_app(self.path)
-                    raise ex
-            self.lastSection = None
+        try:
+            with open(path, 'r') as ins:
+                row = 0
+                for line in ins:
+                    row += 1
+                    try:
+                        self._pushLine(line, row=row)
+                    except FileTypeError as ex:
+                        print(str(ex))
+                        print("* running file directly...")
+                        self._choose_app(self.path)
+                        raise ex
+                self.lastSection = None
+        except UnicodeDecodeError as ex:
+            if path.lower().endswith(".blnk"):
+                raise ex
+            # else:
+            # This is probably not a blnk file, so allow
+            # the blank Exec handler to check the file extension.
+            pass
 
     def getBranch(self, section, key):
         '''
@@ -241,7 +345,7 @@ class BLink:
             path = self.path
             if path is not None:
                 path = "\"" + path + "\""
-            print("WARNING: There was no \"{}\" variable in {}"
+            error("WARNING: There was no \"{}\" variable in {}"
                   "".format(key, path))
             return None
         elif section != trySection:
@@ -250,55 +354,134 @@ class BLink:
                 sectionMsg = "the main section"
             else:
                 sectionMsg = "[{}]".format(section)
-            print("WARNING: \"{}\" was in {}".format(key, sectionMsg))
+            error("WARNING: \"{}\" was in {}".format(key, sectionMsg))
         if v is None:
             return None
         path = v
-        if v[1:2] == ":":
-            if v[2:3] != "\\":
-                raise ValueError(
-                    "The third character should be '\\' when the"
-                    " 2nd character is ':', but the Exec value was"
-                    " \"{}\"".format(v)
-                )
-            if platform.system() != "Windows":
-                path = v[3:].replace("\\", "/")
-                if "%USERPROFILE%" in path:
-                    path = path.replace("%USERPROFILE%", profile)
-                else:
-                    if path.lower().startswith("users/"):
-                        parts = path.split("/")
-                        # print("parts={}".format(parts))
-                        rel = os.path.join(*parts[2:])
-                        old = os.path.join(*parts[:2])
-                        print("* changing \"{}\" to \"{}\""
-                              "".format(old, profile))
-                        # ^ splat ('*') since join takes multiple
-                        #   params not a list.
-                        foundCloud = "owncloud/"
-                        cloud = os.path.join(profile, "Nextcloud")
-                        # cloud = os.path.join(profile, "ownCloud")
-                        if (rel.lower().startswith(foundCloud)
-                                and os.path.isdir(cloud)):
-                            path = os.path.join(
-                                cloud,
-                                rel[len(foundCloud):],
-                            )
-                            print("* changed \"{}\" to \"{}\""
-                                  "".format(os.path.join(*parts[:2]),
-                                            cloud))
-                        else:
-                            path = os.path.join(profile, rel)
 
+        if platform.system() == "Windows":
+            if v[1:2] == ":":
+                if v[2:3] != "\\":
+                    raise ValueError(
+                        "The third character should be '\\' when the"
+                        " 2nd character is ':', but the Exec value was"
+                        " \"{}\"".format(v)
+                    )
+
+        else:  # Not windows
+            if path.startswith("~/"):
+                path = os.path.join(profile, path[2:])
+
+            # Rewrite Windows paths **when on a non-Windows platform**:
+            # error("  [blnk] v: \"{}\"".format(v))
+
+            if v[1:2] == ":":
+
+                # ^ Unless the leading slash is removed, join will
+                #   ignore the param before it (will treat it as
+                #   starting at the root directory)!
+                # error("  v[1:2]: '{}'".format(v[1:2]))
+                if v.lower() == "c:\\tmp":
+                    path = temporaryFiles
+                    debug("  [blnk] Detected {} as {}"
+                          "".format(v, temporaryFiles))
+                elif v.lower().startswith("c"):
+                    debug("  [blnk] Detected c: in {}"
+                          "".format(v.lower()))
+                    path = v[3:].replace("\\", "/")
+                    rest = path
+                    # ^ Cut off C:\, so path may start with Users now:
+                    statedUsersDir = None
+                    for thisUsersDir in BLink.USERS_DIRS:
+                        tryPath = thisUsersDir.lower() + "/"
+                        if path.lower().startswith(tryPath):
+                            statedUsersDir = thisUsersDir
+                            break
+                        else:
+                            debug("  [blnk] {} doesn't start with {}"
+                                  "".format(path.lower(),
+                                            thisUsersDir.lower() + "/"))
+                    debug("  [blnk] statedUsersDir: {}"
+                          "".format(statedUsersDir))
+                    if statedUsersDir is not None:
+                        parts = path.split("/")
+                        # error("  [blnk] parts={}".format(parts))
+                        if len(parts) > 1:
+                            rel = ""
+                            if len(parts[2:]) > 0:
+                                rel = parts[2:][0]
+                                old = parts[:2][0]
+                                if len(parts[2:]) > 1:
+                                    rel = os.path.join(*parts[2:])
+                                if len(parts[:2]) > 1:
+                                    old = os.path.join(*parts[:2])
+                                # ^ splat ('*') since join takes
+                                #   multiple params not a list.
+                                debug("  [blnk] changing \"{}\" to"
+                                      " \"{}\"".format(old, profile))
+                                path = os.path.join(profile, rel)
+                            else:
+                                path = profile
+                        else:
+                            path = profile
+                    elif path.lower() == "users":
+                        path = profiles
+                    else:
+                        path = os.path.join(profile, rest)
+                        error("  [blnk] {} was forced due to bad path:"
+                              " \"{}\".".format(path, v))
+                else:
+                    debug("Detected drive letter that is not C:")
+                    # It starts with letter+colon but letter is NOT c.
+                    path = v.replace("\\", "/")
+                    rest = path[3:]
+                    isGood = False
+                    for thisBase in BLink.BASES:
+                        debug("  [blnk] thisBase: \"{}\""
+                              "".format(thisBase))
+                        debug("  [blnk] rest: \"{}\""
+                              "".format(rest))
+                        tryPath = os.path.join(thisBase, rest)
+                        debug("  [blnk] tryPath: \"{}\""
+                              "".format(tryPath))
+                        if os.path.exists(tryPath):
+                            path = tryPath
+                            # Change something like D:\Meshes to
+                            # /home/x/Nextcloud/Meshes or use some other
+                            # replacement for D:\ that is in BASES.
+                            error("  [blnk] {} was detected."
+                                  "".format(tryPath))
+                            isGood = True
+                            break
+                        else:
+                            error("  [blnk] {} doesn't exist."
+                                  "".format(tryPath))
+                    if not isGood:
+                        # Force it to be a non-Window path even if it
+                        # doesn't exist, but use the home directory
+                        # so it is a path that makes some sort of sense
+                        # to everyone even if they don't have the
+                        path = os.path.join(profile, rest)
+                        error("  [blnk] {} was forced due to bad path:"
+                              " \"{}\".".format(path, v))
+            else:
+                path = v.replace("\\", "/")
+
+        path = replace_vars(path)
+        path = replace_isolated(path, statedCloud, myCloud,
+                                case_sensitive=False)
+        if path != v:
+            error("  [blnk] changing \"{}\" to"
+                  " \"{}\"".format(v, path))
         return path
 
     @staticmethod
     def _run_parts(parts, check=True):
-        print("* running \"{}\"...".format(parts))
+        error("* running \"{}\"...".format(parts))
         runner = subprocess.check_call
         if hasattr(subprocess, 'run'):
             runner = subprocess.check_call
-            print("  - using subprocess.check_call")
+            error("  - using subprocess.check_call")
         try:
             runner(parts, check=check)
         except TypeError as ex:
@@ -311,32 +494,39 @@ class BLink:
     def _run(path):
         tryCmd = "xdg-open"
         # TODO: try os.popen('open "{}"') on mac
+        # NOTE: %USERPROFILE%, $HOME, ~, or such should already be
+        #   replaced by getExec.
         if platform.system() == "Windows":
             os.startfile(path, 'open')
             # runner('cmd /c start "{}"'.format(path))
             return
         try:
-            print("  - {}...".format(tryCmd))
+            error("  - {}...".format(tryCmd))
             BLink._run_parts([tryCmd, path], check=True)
         except OSError as ex:
             try:
-                print("  - open...")
+                error("  - open...")
                 BLink._run_parts(['open', path], check=True)
             except OSError as ex:
-                print("  - trying xdg-launch...")
+                error("  - trying xdg-launch...")
                 BLink._run_parts(['xdg-launch', path], check=True)
 
     def _choose_app(self, path):
-        print("  - choosing app for \"{}\"".format(path))
+        error("  - choosing app for \"{}\"".format(path))
         app = "geany"
-        print("    - {}".format(app))
-        BLink._run_parts([app, self.path])
+        # If you set blnk to handle unknown files:
+        if path.lower().endswith(".kdb"):
+            app = "keepassxc"
+        elif path.lower().endswith(".kdbx"):
+            app = "keepassxc"
+        error("    - {}".format(app))
+        BLink._run_parts([app, path])
 
     def run(self):
         execStr = self.getExec()
         if execStr is None:
-            print("* Exec is None...")
-            self._choose_app(execStr)
+            error("* Exec is None...")
+            self._choose_app(self.path)
             return
         BLink._run(execStr)
 
@@ -353,14 +543,14 @@ def usage():
     print(__doc__)
 
 def main(args):
-    print("* checking for \"{}\"".format(dtPath))
+    error("* checking for \"{}\"".format(dtPath))
     if not os.path.isfile(dtPath):
-        print("* writing \"{}\"...".format(dtPath))
+        error("* writing \"{}\"...".format(dtPath))
         with open(dtPath, 'w') as outs:
             for line in dtLines:
                 outs.write(line + "\n")
         if not platform.system == "Windows":
-            print("  - installing...")
+            error("  - installing...")
             iconCommandParts = ["xdg-desktop-icon", "install",
                                 "--novendor"]
             cmdParts = iconCommandParts + [dtPath]
@@ -369,8 +559,8 @@ def main(args):
             except subprocess.CalledProcessError:
                 os.remove(dtPath)
                 # ^ so it will try again next time
-                print("{} failed.".format(cmdParts))
-                print(str(cmdParts))
+                error("{} failed.".format(cmdParts))
+                error(str(cmdParts))
 
     if len(args) < 2:
         usage()
@@ -397,7 +587,7 @@ def main(args):
                                  "".format(arg, path))
     if path is None:
         usage()
-        print("Error: The path was not set (args={}).".format(args))
+        error("Error: The path was not set (args={}).".format(args))
         exit(1)
     Type = None
     if os.path.isdir(path):
@@ -406,7 +596,7 @@ def main(args):
         Type = "File"
     if Type is None:
         usage()
-        print("Error: The path \"{}\" is not a file or directory"
+        error("Error: The path \"{}\" is not a file or directory"
               " (args={}).".format(path, args))
         exit(1)
 
@@ -424,13 +614,13 @@ def main(args):
         # ^ Use the current directory, so do not use the full path.
         content = blnkTemplate.format(Type=Type, Name=Name, Exec=path,
                                       Terminal=Terminal)
-        # print(content)
+        # error(content)
         if os.path.exists(newPath):
-            print("Error: {} already exists.".format(newPath))
+            error("Error: {} already exists.".format(newPath))
             exit(1)
         with open(newPath, 'w') as outs:
             outs.write(content)
-        print("* wrote \"{}\"".format(newPath))
+        error("* wrote \"{}\"".format(newPath))
     else:
         raise NotImplementedError("The mode \"{}\" is not known."
                                   "".format(mode))

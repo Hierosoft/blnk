@@ -1,0 +1,7 @@
+Content-Type: text/blnk
+Type:Directory
+NoDisplay:true
+Terminal:false
+Name:Profiles
+Encoding:UTF-8
+Exec:C:\Users
