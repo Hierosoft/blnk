@@ -177,6 +177,10 @@ def replace_vars(path):
             path = replace_isolated(path, old, new)
     return path
 
+def showErrorWindow(msg, title="Blnk"):
+    from tkinter import messagebox
+    messagebox.showerror(title, msg)
+
 myBinPath = __file__
 tryBinPath = os.path.join(local, "bin", "blnk")
 if os.path.isfile(tryBinPath):
@@ -497,19 +501,31 @@ class BLink:
         # NOTE: %USERPROFILE%, $HOME, ~, or such should already be
         #   replaced by getExec.
         if platform.system() == "Windows":
+            if (len(path) >= 2) and (path[1] == ":"):
+                if not os.path.exists(path):
+                    showErrorWindow("The path doesn't exist: {}"
+                                    "".format(path))
+                    return
             os.startfile(path, 'open')
             # runner('cmd /c start "{}"'.format(path))
             return
+        thisOpenCmd = None
         try:
-            error("  - {}...".format(tryCmd))
-            BLink._run_parts([tryCmd, path], check=True)
+            thisOpenCmd = tryCmd
+            error("  - {}...".format(thisOpenCmd))
+            BLink._run_parts([thisOpenCmd, path], check=True)
         except OSError as ex:
             try:
-                error("  - open...")
-                BLink._run_parts(['open', path], check=True)
+                thisOpenCmd = "open"
+                error("  - {}...".format(thisOpenCmd))
+                BLink._run_parts([thisOpenCmd, path], check=True)
             except OSError as ex:
-                error("  - trying xdg-launch...")
-                BLink._run_parts(['xdg-launch', path], check=True)
+                thisOpenCmd = "xdg-launch"
+                error("  - trying {}...".format(thisOpenCmd))
+                BLink._run_parts([thisOpenCmd, path], check=True)
+        except subprocess.CalledProcessError as ex:
+            showErrorWindow("{} couldn't open the path: \"{}\""
+                            "".format(thisOpenCmd, path))
 
     def _choose_app(self, path):
         error("  - choosing app for \"{}\"".format(path))
