@@ -1,0 +1,18 @@
+#!/bin/sh
+mkdir -p ~/.local/bin
+logsDir=~/.var/log/blnk
+mkdir -p "$logsDir"
+if [ -z "$Exec" ]; then
+    Exec=~/git/blnk/blnk.py
+fi
+echo "Output:" > $logsDir/out.log
+echo "Errors:" > $logsDir/err.log
+date >> $logsDir/out.log
+date >> $logsDir/err.log
+python3 $Exec "$@" 1>>$logsDir/out.log 2>>$logsDir/err.log
+echo >> $logsDir/out.log
+echo >> $logsDir/err.log
+code=$?
+cat $logsDir/err.log
+cat $logsDir/out.log
+if [ $code -ne 0 ]; then exit $code; fi
