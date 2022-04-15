@@ -64,8 +64,6 @@ rm ~/Desktop/blnk.desktop
 ```
 
 ## Development
-### Tasks
-- [ ] Consider changing from ':' to '=' as per xdg shortcuts.
 
 ### Copypasta
 ```

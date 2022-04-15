@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [git] - 2022-03-31
+### Changed
+- Change from the ':' to the '=' operator as per xdg desktop files (retain the "Content-Type: text/blnk" line).
+  - Warn and adapt if the blnk file has the ':' operator.
+
+
 ## [git] - 2021-11-06
 ### Added
 - tests
