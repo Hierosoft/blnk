@@ -735,6 +735,8 @@ def main(args):
     error("* checking for \"{}\"".format(dtPath))
     if not os.path.isfile(dtPath):
         error("* writing \"{}\"...".format(dtPath))
+        if not os.path.isdir(shortcutsDir):
+            os.makedirs(shortcutsDir)
         with open(dtPath, 'w') as outs:
             for line in dtLines:
                 outs.write(line + "\n")
