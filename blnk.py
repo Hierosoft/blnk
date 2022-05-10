@@ -24,6 +24,7 @@ def which(program, more_paths=[]):
     #     test-if-executable-exists-in-python
     import os
     def is_exe(fpath):
+        # The fpath param name DIFFERS since it is an inline function.
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
     fpath = os.path.split(program)[0]
