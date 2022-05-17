@@ -16,6 +16,14 @@ except ImportError:
 
 verbose = False
 
+for argI in range(1, len(sys.argv)):
+    arg = sys.argv[argI]
+    if arg.startswith("--"):
+        if arg == "--debug":
+            verbose = True
+        elif arg == "--verbose":
+            verbose = True
+
 
 def which(program, more_paths=[]):
     # Jay, & Mar77i. (2017, November 10). Path-Test if executable exists in
