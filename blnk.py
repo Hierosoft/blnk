@@ -129,6 +129,7 @@ class FileTypeError(Exception):
 
 profile = None
 
+# region same as world_clock (Poikilos' fork)
 myDirName = "blnk"
 AppData = None
 local = None
@@ -201,6 +202,7 @@ substitutions = {
     "$HOME": profile,
     "~": profile,
 }
+# endregion same as world_clock (Poikilos' fork)
 
 
 def replace_isolated(path, old, new, case_sensitive=True):
@@ -259,6 +261,7 @@ def cmdjoin(parts):
         cmd += thisDelimiter + part
         thisDelimiter = " "
     return cmd
+
 
 def showErrorWindow(msg, title=("Blnk (Python {})"
                                 "".format(platform.python_version()))):
@@ -726,7 +729,7 @@ dtLines = [
     "Exec={}".format(myBinPath),
     "MimeType=text/blnk;",
     "NoDisplay=true",
-    "Name=blnk".format(myBinPath),
+    "Name=blnk",
     "Type=Application",
 ]
 #
