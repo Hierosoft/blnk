@@ -1,15 +1,15 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from __future__ import print_function
 import sys
 import os
 import platform
 import subprocess
-try:
+python_mr = sys.version_info.major
+if python_mr == 3:
     # import tkinter as tk
     # from tkinter import ttk
     from tkinter import messagebox
-except ImportError:
-    # Python 2
+else:
     # import Tkinter as tk
     # import ttk
     import tkMessageBox as messagebox
@@ -263,11 +263,22 @@ def cmdjoin(parts):
     return cmd
 
 
-def showErrorWindow(msg, title=("Blnk (Python {})"
-                                "".format(platform.python_version()))):
+def showMsgBoxOrErr(msg, title="Blnk (Python {})".format(python_mr),
+                    try_gui=True):
     # from tkinter import messagebox
-    error("{}: {}".format(title, msg))
-    messagebox.showerror(title, msg)
+    error("{}\nusing {}".format(msg, title))
+    print("try_gui={}".format(try_gui))
+    if not try_gui:
+        return
+    try:
+        messagebox.showerror(title, msg)
+    except tk.TclError as ex:
+        if "no display" in str(ex):
+            # "no display and no $DISPLAY environment variable"
+            # (The user is not in a GUI session)
+            pass
+        else:
+            raise ex
 
 
 myBinPath = __file__
@@ -313,7 +324,7 @@ class BLink:
                     # ^ If iPlus2C == "\\", then the path may start with
                     # \\ (the start of a UNC network path).
                     self.assignmentOperator = ":"
-                    error("* revering to deprecated ':' operator")
+                    error("* reverting to deprecated ':' operator")
                     i = tmpI
                 else:
                     error("WARNING: The line contains no '=', but ':'"
@@ -372,7 +383,7 @@ class BLink:
                 self.contentType = value
                 self.contentTypeParts = values
         if self.contentType != "text/blnk":
-            error("* running file directly due to:")
+            print("* running non-blnk file directly")
             raise FileTypeError(
                 "The file must contain \"Content-Type:\""
                 " (usually \"Content-Type: text/blnk\")"
@@ -428,10 +439,13 @@ class BLink:
                     try:
                         self._pushLine(line, row=row)
                     except FileTypeError as ex:
-                        error(str(ex))
-                        error("* running file directly...")
-                        self._choose_app(self.path)
-                        raise ex
+                        # Do not produce error messages for the bash
+                        # script to show in the GUI since this is
+                        # recoverable (and expected if plain text files
+                        # are associated with blnk.
+                        print(str(ex))
+                        print("* running file directly...")
+                        return self._choose_app(self.path)
                 self.lastSection = None
         except UnicodeDecodeError as ex:
             if path.lower().endswith(".blnk"):
@@ -498,14 +512,14 @@ class BLink:
                 path = os.path.join(profile, path[2:])
 
             # Rewrite Windows paths **when on a non-Windows platform**:
-            # error("  [blnk] v: \"{}\"".format(v))
+            # print("  [blnk] v: \"{}\"".format(v))
 
             if v[1:2] == ":":
 
                 # ^ Unless the leading slash is removed, join will
                 #   ignore the param before it (will treat it as
                 #   starting at the root directory)!
-                # error("  v[1:2]: '{}'".format(v[1:2]))
+                # print("  v[1:2]: '{}'".format(v[1:2]))
                 if v.lower() == "c:\\tmp":
                     path = temporaryFiles
                     debug("  [blnk] Detected {} as {}"
@@ -530,7 +544,7 @@ class BLink:
                           "".format(statedUsersDir))
                     if statedUsersDir is not None:
                         parts = path.split("/")
-                        # error("  [blnk] parts={}".format(parts))
+                        # print("  [blnk] parts={}".format(parts))
                         if len(parts) > 1:
                             rel = ""
                             if len(parts[2:]) > 0:
@@ -574,7 +588,7 @@ class BLink:
                             # Change something like D:\Meshes to
                             # /home/x/Nextcloud/Meshes or use some other
                             # replacement for D:\ that is in BASES.
-                            error("  [blnk] {} was detected."
+                            print("  [blnk] {} was detected."
                                   "".format(tryPath))
                             isGood = True
                             break
@@ -596,20 +610,20 @@ class BLink:
         path = replace_isolated(path, statedCloud, myCloud,
                                 case_sensitive=False)
         if path != v:
-            error("  [blnk] changing \"{}\" to"
+            print("  [blnk] changing \"{}\" to"
                   " \"{}\"".format(v, path))
         return path
 
     @staticmethod
     def _run_parts(parts, check=True):
-        error("* running \"{}\"...".format(parts))
-        runner = subprocess.check_call
+        print("* running \"{}\"...".format(parts))
+        run_fn = subprocess.check_call
         use_check = False
         if hasattr(subprocess, 'run'):
             # Python 3
             use_check = True
-            runner = subprocess.run
-            error("  - using subprocess.run")
+            run_fn = subprocess.run
+            print("  - using subprocess.run")
             part0 = which(parts[0])
             # if localPath not in os.environ["PATH"].split(os.pathsep):
             if part0 is None:
@@ -617,9 +631,9 @@ class BLink:
                 if part0 is not None:
                     parts[0] = part0
         else:
-            error("  - using Python 2 subprocess.check_call"
+            print("  - using Python 2 subprocess.check_call"
                   " from Python {}"
-                  "".format(platform.python_version()))
+                  "".format(python_mr))
             # check_call requires a full path (!):
             if not os.path.isfile(parts[0]):
                 part0 = which(parts[0], more_paths=[localBinPath])
@@ -627,9 +641,9 @@ class BLink:
                     parts[0] = part0
         try:
             if use_check:
-                runner(parts, check=check)
+                run_fn(parts, check=check)
             else:
-                runner(parts)
+                run_fn(parts)
         except FileNotFoundError as ex:
             pathMsg = (" (The system path wasn't checked"
                        " since the executable part is a path)")
@@ -637,34 +651,32 @@ class BLink:
                 # It is a filename not a path.
                 pathMsg = (" ({} is not in the system path)"
                            "".format(parts[0]))
-            showErrorWindow(
+            raise FileNotFoundError(
                 "Running external application `{}` for a non-blnk file"
                 " failed{}:"
                 " {}".format(cmdjoin(parts), pathMsg, ex),
             )
-            raise ex
-        except Exception as ex:
-            showErrorWindow(
-                "Running external application `{}` for a non-blnk file"
-                " failed: {}".format(cmdjoin(parts), ex),
+        except FileNotFoundError as ex:
+            raise FileNotFoundError(
+                "The file was not found: "
+                " {}".format(cmdjoin(parts), ex),
             )
+        except Exception as ex:
             raise ex
         '''
         except TypeError as ex:
-            # should only happen if sending check=check when runner
+            # should only happen if sending check=check when run_fn
             # is check_call--which doesn't work since check is only a
-            # keyword argument when runner is run.
+            # keyword argument when run_fn is run.
             if "unexpected keyword argument 'check'" in str(ex):
                 try:
-                    runner(parts)
+                    run_fn(parts)
                 except FileNotFoundError as ex:
-                    showErrorWindow(
-                        "{}".format(ex),
-                    )
                     raise ex
             else:
                 raise ex
         '''
+        return 0
     @staticmethod
     def _run(path):
         tryCmd = "xdg-open"
@@ -674,32 +686,43 @@ class BLink:
         if platform.system() == "Windows":
             if (len(path) >= 2) and (path[1] == ":"):
                 if not os.path.exists(path):
-                    showErrorWindow("The path doesn't exist: {}"
-                                    "".format(path))
-                    return
+                    raise FileNotFoundError(
+                        "The path doesn't exist: {}"
+                        "".format(path)
+                    )
             os.startfile(path, 'open')
-            # runner('cmd /c start "{}"'.format(path))
-            return
+            # run_fn('cmd /c start "{}"'.format(path))
+            return 0
         thisOpenCmd = None
+        if not "://" in path:
+            if not os.path.isfile(path):
+                raise FileNotFoundError(
+                    '"{}"'
+                    ''.format(path)
+                )
         try:
             thisOpenCmd = tryCmd
-            error("  - {}...".format(thisOpenCmd))
-            BLink._run_parts([thisOpenCmd, path], check=True)
+            print("  - thisOpenCmd={}...".format(thisOpenCmd))
+            return BLink._run_parts([thisOpenCmd, path], check=True)
         except OSError as ex:
             try:
                 thisOpenCmd = "open"
-                error("  - {}...".format(thisOpenCmd))
-                BLink._run_parts([thisOpenCmd, path], check=True)
+                print("  - thisOpenCmd={}...".format(thisOpenCmd))
+                return BLink._run_parts([thisOpenCmd, path], check=True)
             except OSError as ex:
                 thisOpenCmd = "xdg-launch"
-                error("  - trying {}...".format(thisOpenCmd))
-                BLink._run_parts([thisOpenCmd, path], check=True)
+                print("  - trying {}...".format(thisOpenCmd))
+                return BLink._run_parts([thisOpenCmd, path], check=True)
         except subprocess.CalledProcessError as ex:
-            showErrorWindow("{} couldn't open the path: \"{}\""
-                            "".format(thisOpenCmd, path))
+            # raise subprocess.CalledProcessError(
+            #     "{} couldn't open the path: \"{}\""
+            #     "".format(thisOpenCmd, path)
+            # )
+            raise ex
+        return 1  # This should never happen.
 
     def _choose_app(self, path):
-        error("  - choosing app for \"{}\"".format(path))
+        print("  - choosing app for \"{}\"".format(path))
         app = "geany"
         # If you set blnk to handle unknown files:
         more_parts = []
@@ -713,16 +736,15 @@ class BLink:
             path = os.path.split(path)[0]
             # ^ With the -p option, Ninja-IDE will only open a directory
             #   (with or without an nja file) not the nja file itself.
-        error("    - {}".format(app))
-        BLink._run_parts([app] + more_parts + [path])
+        print("    - app={}".format(app))
+        return BLink._run_parts([app] + more_parts + [path])
 
     def run(self):
         execStr = self.getExec()
         if execStr is None:
             error("* Exec is None...")
-            self._choose_app(self.path)
-            return
-        BLink._run(execStr)
+            return self._choose_app(self.path)
+        return BLink._run(execStr)
 
 dtLines = [
     "[Desktop Entry]",
@@ -742,18 +764,17 @@ dtLines = [
 def usage():
     print(__doc__)
 
-
-def main(args):
-    error("* checking for \"{}\"".format(dtPath))
+def create_icon():
+    print("* checking for \"{}\"".format(dtPath))
     if not os.path.isfile(dtPath):
-        error("* writing \"{}\"...".format(dtPath))
+        print("* writing \"{}\"...".format(dtPath))
         if not os.path.isdir(shortcutsDir):
             os.makedirs(shortcutsDir)
         with open(dtPath, 'w') as outs:
             for line in dtLines:
                 outs.write(line + "\n")
         if not platform.system == "Windows":
-            error("  - installing...")
+            print("  - installing...")
             iconCommandParts = ["xdg-desktop-icon", "install",
                                 "--novendor"]
             cmdParts = iconCommandParts + [dtPath]
@@ -765,6 +786,9 @@ def main(args):
                 error("{} failed.".format(cmdParts))
                 error(str(cmdParts))
 
+
+def main(args):
+    # create_icon()
     if len(args) < 2:
         usage()
         raise ValueError("Error: The first argument is the program but"
@@ -775,12 +799,16 @@ def main(args):
     mode = MODE_RUN
     path = None
     Terminal = "false"
+    options = {}
+    options["interactive"] = True
     for i in range(1, len(args)):
         arg = args[i]
         if arg == "-s":
             mode = MODE_CS
         elif arg == "--terminal":
             Terminal = "true"
+        elif arg in ["--non-interactive", "-y"]:
+            options["interactive"] = False
         else:
             if path is None:
                 path = arg
@@ -788,10 +816,11 @@ def main(args):
                 raise ValueError("The option \"{}\" is unknown and the"
                                  " path was already \"{}\""
                                  "".format(arg, path))
+    try_gui = options["interactive"]
     if path is None:
         usage()
         error("Error: The path was not set (args={}).".format(args))
-        exit(1)
+        return 1
     Type = None
     if os.path.isdir(path):
         Type = "Directory"
@@ -799,17 +828,32 @@ def main(args):
         Type = "File"
     if Type is None:
         usage()
-        error("Error: The path \"{}\" is not a file or directory"
-              " (args={}).".format(path, args))
-        exit(1)
+        showMsgBoxOrErr(
+            "Error: The path \"{}\" is not a file or directory"
+            " (args={}).".format(path, args),
+            try_gui=try_gui,
+        )
+        return 1
 
     if mode == MODE_RUN:
         try:
             link = BLink(path)
             link.run()
+            return 0
         except FileTypeError:
             pass
             # already handled by Blink
+        except FileNotFoundError as ex:
+            showMsgBoxOrErr(
+                "The file was not found: {}".format(ex),
+                try_gui=try_gui,
+            )
+        except Exception as ex:
+            showMsgBoxOrErr(
+                "Run couldn't finish: {}".format(ex),
+                try_gui=try_gui,
+            )
+        return 1
     elif mode == MODE_CS:
         Name = os.path.splitext(os.path.split(path)[-1])[0]
         newName = Name + ".blnk"
@@ -820,14 +864,14 @@ def main(args):
         # error(content)
         if os.path.exists(newPath):
             error("Error: {} already exists.".format(newPath))
-            exit(1)
+            return 1
         with open(newPath, 'w') as outs:
             outs.write(content)
-        error("* wrote \"{}\"".format(newPath))
+        print("* wrote \"{}\"".format(newPath))
     else:
         raise NotImplementedError("The mode \"{}\" is not known."
                                   "".format(mode))
-
+    return 0
 
 if __name__ == "__main__":
-    main(sys.argv)
+    sys.exit(main(sys.argv))

@@ -6,13 +6,26 @@ if [ -z "$Exec" ]; then
     Exec=~/git/blnk/blnk.py
 fi
 echo "Output:" > $logsDir/out.log
-echo "Errors:" > $logsDir/err.log
+# echo "Errors:" > $logsDir/err.log
 date >> $logsDir/out.log
-date >> $logsDir/err.log
-python3 $Exec "$@" 1>>$logsDir/out.log 2>>$logsDir/err.log
-echo >> $logsDir/out.log
-echo >> $logsDir/err.log
+# date >> $logsDir/err.log
+python3 $Exec --non-interactive "$@" 1>>$logsDir/out.log 2>$logsDir/err.log
 code=$?
-cat $logsDir/err.log
+echo >> $logsDir/out.log
+# echo >> $logsDir/err.log
+# cat $logsDir/err.log
 cat $logsDir/out.log
-if [ $code -ne 0 ]; then exit $code; fi
+if [ $code -ne 0 ]; then
+    # TODO: If contains ModuleNotFoundError: No module named 'tkinter'
+    #   then show a message saying:
+    cat >/dev/null <<END
+You have Python but not tkinter, so you must be on a Debian-based distro. First try: sudo apt-get install python3-tk
+END
+    err_line_count=`wc -l < $logsDir/err.log`
+    if [ $err_line_count -gt 0 ]; then
+        xmessage -file $logsDir/err.log
+    else
+        xmessage "Blnk had an unrecorded error. See $logsDir/out.log for information about the last run."
+    fi
+    exit $code
+fi

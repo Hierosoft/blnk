@@ -15,6 +15,7 @@ This is a Python rewrite of blnk-cs formerly called blnk (I didn't even look at 
     - nja: ninja-ide
   - The path ~/.local/bin is checked even if the matching program from the list above isn't in your PATH. That check resolves the issue of the feature only working from a terminal (such as if you added `PATH=$PATH:/home/owner/.local/bin` only to ~/.bashrc).
     - However, resolve the issue for yourself permanently using the step starting with "Add the local bin folder to your path for GUI applications" under "Install on Linux".
+- The `--non-interactive` (or `-y`) option ensures that no graphical dialog boxes are shown (They will also not be shown if there is no GUI session). If there is no interaction, the caller should show the error output (not standard output necessarily) and check the return of the program. The blnk shell script for GNU+Linux systems uses the option in that way and serves as an example.
 
 ## Install
 - Associate text files to blnk and it will try to edit the file if there is no Exec line (feature status: See `_choose_app` in blnk.py).
