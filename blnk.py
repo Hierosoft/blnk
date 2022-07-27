@@ -14,15 +14,15 @@ else:
     # import ttk
     import tkMessageBox as messagebox
 
-verbose = False
+verbosity = 0
 
 for argI in range(1, len(sys.argv)):
     arg = sys.argv[argI]
     if arg.startswith("--"):
         if arg == "--debug":
-            verbose = True
+            verbosity = 2
         elif arg == "--verbose":
-            verbose = True
+            verbosity = 1
 
 
 def which(program, more_paths=[]):
@@ -48,13 +48,15 @@ def which(program, more_paths=[]):
     return None
 
 
-def error(*args, **kwargs):
+def echo0(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def debug(*args, **kwargs):
-    if verbose:
-        print(*args, file=sys.stderr, **kwargs)
+def echo1(*args, **kwargs):
+    if verbosity < 1:
+        return False
+    print(*args, file=sys.stderr, **kwargs)
+    return True
 
 
 blnkTemplate = '''Content-Type: text/blnk
@@ -266,7 +268,7 @@ def cmdjoin(parts):
 def showMsgBoxOrErr(msg, title="Blnk (Python {})".format(python_mr),
                     try_gui=True):
     # from tkinter import messagebox
-    error("{}\nusing {}".format(msg, title))
+    echo0("{}\nusing {}".format(msg, title))
     print("try_gui={}".format(try_gui))
     if not try_gui:
         return
@@ -324,10 +326,10 @@ class BLink:
                     # ^ If iPlus2C == "\\", then the path may start with
                     # \\ (the start of a UNC network path).
                     self.assignmentOperator = ":"
-                    error("* reverting to deprecated ':' operator")
+                    echo0("* reverting to deprecated ':' operator")
                     i = tmpI
                 else:
-                    error("WARNING: The line contains no '=', but ':'"
+                    echo0("WARNING: The line contains no '=', but ':'"
                           " seems like a path since it is followed by"
                           " \\ not \\\\")
         if i < 0:
@@ -342,7 +344,7 @@ class BLink:
         k = line[:i].strip()
         v = line[i+len(self.assignmentOperator):].strip()
         if self.commentDelimiter in v:
-            error("WARNING: `{}` contains a comment delimiter '{}'"
+            echo0("WARNING: `{}` contains a comment delimiter '{}'"
                   " but inline comments are not supported."
                   "".format(line, self.commentDelimiter))
         return (k, v)
@@ -367,7 +369,7 @@ class BLink:
         '''
         if row is None:
             if self.lastSection is not None:
-                error("WARNING: The line `{}` was a custom line not on"
+                echo0("WARNING: The line `{}` was a custom line not on"
                       " a row of a file, but it will be placed in the"
                       " \"{}\" section which was still present."
                       "".format(line, self.lastSection))
@@ -484,7 +486,7 @@ class BLink:
             path = self.path
             if path is not None:
                 path = "\"" + path + "\""
-            error("WARNING: There was no \"{}\" variable in {}"
+            echo0("WARNING: There was no \"{}\" variable in {}"
                   "".format(key, path))
             return None
         elif section != trySection:
@@ -493,7 +495,7 @@ class BLink:
                 sectionMsg = "the main section"
             else:
                 sectionMsg = "[{}]".format(section)
-            error("WARNING: \"{}\" was in {}".format(key, sectionMsg))
+            echo0("WARNING: \"{}\" was in {}".format(key, sectionMsg))
         if v is None:
             return None
         path = v
@@ -522,10 +524,10 @@ class BLink:
                 # print("  v[1:2]: '{}'".format(v[1:2]))
                 if v.lower() == "c:\\tmp":
                     path = temporaryFiles
-                    debug("  [blnk] Detected {} as {}"
+                    echo1("  [blnk] Detected {} as {}"
                           "".format(v, temporaryFiles))
                 elif v.lower().startswith("c"):
-                    debug("  [blnk] Detected c: in {}"
+                    echo1("  [blnk] Detected c: in {}"
                           "".format(v.lower()))
                     path = v[3:].replace("\\", "/")
                     rest = path
@@ -537,10 +539,10 @@ class BLink:
                             statedUsersDir = thisUsersDir
                             break
                         else:
-                            debug("  [blnk] {} doesn't start with {}"
+                            echo1("  [blnk] {} doesn't start with {}"
                                   "".format(path.lower(),
                                             thisUsersDir.lower() + "/"))
-                    debug("  [blnk] statedUsersDir: {}"
+                    echo1("  [blnk] statedUsersDir: {}"
                           "".format(statedUsersDir))
                     if statedUsersDir is not None:
                         parts = path.split("/")
@@ -556,7 +558,7 @@ class BLink:
                                     old = os.path.join(*parts[:2])
                                 # ^ splat ('*') since join takes
                                 #   multiple params not a list.
-                                debug("  [blnk] changing \"{}\" to"
+                                echo1("  [blnk] changing \"{}\" to"
                                       " \"{}\"".format(old, profile))
                                 path = os.path.join(profile, rel)
                             else:
@@ -567,21 +569,21 @@ class BLink:
                         path = profiles
                     else:
                         path = os.path.join(profile, rest)
-                        error("  [blnk] {} was forced due to bad path:"
+                        echo0("  [blnk] {} was forced due to bad path:"
                               " \"{}\".".format(path, v))
                 else:
-                    debug("Detected drive letter that is not C:")
+                    echo1("Detected drive letter that is not C:")
                     # It starts with letter+colon but letter is NOT c.
                     path = v.replace("\\", "/")
                     rest = path[3:]
                     isGood = False
                     for thisBase in BLink.BASES:
-                        debug("  [blnk] thisBase: \"{}\""
+                        echo1("  [blnk] thisBase: \"{}\""
                               "".format(thisBase))
-                        debug("  [blnk] rest: \"{}\""
+                        echo1("  [blnk] rest: \"{}\""
                               "".format(rest))
                         tryPath = os.path.join(thisBase, rest)
-                        debug("  [blnk] tryPath: \"{}\""
+                        echo1("  [blnk] tryPath: \"{}\""
                               "".format(tryPath))
                         if os.path.exists(tryPath):
                             path = tryPath
@@ -593,7 +595,7 @@ class BLink:
                             isGood = True
                             break
                         else:
-                            error("  [blnk] {} doesn't exist."
+                            echo0("  [blnk] {} doesn't exist."
                                   "".format(tryPath))
                     if not isGood:
                         # Force it to be a non-Window path even if it
@@ -601,7 +603,7 @@ class BLink:
                         # so it is a path that makes some sort of sense
                         # to everyone even if they don't have the
                         path = os.path.join(profile, rest)
-                        error("  [blnk] {} was forced due to bad path:"
+                        echo0("  [blnk] {} was forced due to bad path:"
                               " \"{}\".".format(path, v))
             else:
                 path = v.replace("\\", "/")
@@ -742,7 +744,7 @@ class BLink:
     def run(self):
         execStr = self.getExec()
         if execStr is None:
-            error("* Exec is None...")
+            echo0("* Exec is None...")
             return self._choose_app(self.path)
         return BLink._run(execStr)
 
@@ -783,8 +785,8 @@ def create_icon():
             except subprocess.CalledProcessError:
                 # os.remove(dtPath)
                 # ^ Force automatically recreating the icon.
-                error("{} failed.".format(cmdParts))
-                error(str(cmdParts))
+                echo0("{} failed.".format(cmdParts))
+                echo0(str(cmdParts))
 
 
 def main(args):
@@ -819,7 +821,7 @@ def main(args):
     try_gui = options["interactive"]
     if path is None:
         usage()
-        error("Error: The path was not set (args={}).".format(args))
+        echo0("Error: The path was not set (args={}).".format(args))
         return 1
     Type = None
     if os.path.isdir(path):
@@ -861,9 +863,9 @@ def main(args):
         # ^ Use the current directory, so do not use the full path.
         content = blnkTemplate.format(Type=Type, Name=Name, Exec=path,
                                       Terminal=Terminal)
-        # error(content)
+        # echo0(content)
         if os.path.exists(newPath):
-            error("Error: {} already exists.".format(newPath))
+            echo0("Error: {} already exists.".format(newPath))
             return 1
         with open(newPath, 'w') as outs:
             outs.write(content)
