@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
+# See __doc__ further down for documentation.
 from __future__ import print_function
 import sys
 import os
 import platform
 import subprocess
+import traceback
 python_mr = sys.version_info.major
 if python_mr == 3:
     # import tkinter as tk
@@ -57,6 +59,29 @@ def echo1(*args, **kwargs):
         return False
     print(*args, file=sys.stderr, **kwargs)
     return True
+
+
+def echo2(*args, **kwargs):
+    if verbosity < 2:
+        return False
+    print(*args, file=sys.stderr, **kwargs)
+    return True
+
+
+def get_traceback(indent=""):
+    ex_type, ex, tb = sys.exc_info()
+    msg = "{}{} {}:\n".format(indent, ex_type, ex)
+    msg += traceback.format_exc()
+    del tb
+    return msg
+
+
+def view_traceback(indent=""):
+    ex_type, ex, tb = sys.exc_info()
+    print("{}{} {}: ".format(indent, ex_type, ex), file=sys.stderr)
+    traceback.print_tb(tb)
+    del tb
+    print("", file=sys.stderr)
 
 
 blnkTemplate = '''Content-Type: text/blnk
@@ -363,9 +388,15 @@ class BLink:
         k = line[:i].strip()
         v = line[i+len(self.assignmentOperator):].strip()
         if self.commentDelimiter in v:
-            echo0("WARNING: `{}` contains a comment delimiter '{}'"
+            # if k != "URL":
+            echo1("WARNING: `{}` contains a comment delimiter '{}'"
                   " but inline comments are not supported."
                   "".format(line, self.commentDelimiter))
+            # URL may have a # that is not a comment.
+            # If the URL blnk file was automatically generated such as
+            #   with the blnk -s command, then the Name and Comment will
+            #   contain the character as well since they are generated
+            #   from the target.
         return (k, v)
 
     def getSection(self, line):
@@ -489,17 +520,16 @@ class BLink:
             v = sectionD.get(key)
         if v is None:
             section = None
-            for trySection, sectionD in self.tree.keys():
+            for trySection, sectionD in self.tree.items():
                 v = sectionD.get(key)
                 if v is not None:
                     section = trySection
                     break
         return section, v
 
-    def getExec(self):
+    def getExec(self, key="Exec"):
         result = None
         trySection = BLink.NO_SECTION
-        key = "Exec"
         section, v = self.getBranch(trySection, key)
         if v is None:
             path = self.path
@@ -761,6 +791,9 @@ class BLink:
         return BLink._run_parts([app] + more_parts + [path])
 
     def run(self):
+        url = self.getExec(key="URL")
+        if url is not None:
+            return BLink._run(url)
         execStr = self.getExec()
         if execStr is None:
             echo0("* Exec is None...")
@@ -864,6 +897,8 @@ def main(args):
         try:
             link = BLink(path)
             link.run()
+            # ^ init and run are in the same context in case construct
+            #   fails.
             return 0
         except FileTypeError:
             pass
@@ -874,10 +909,12 @@ def main(args):
                 try_gui=try_gui,
             )
         except Exception as ex:
+            msg = "Run couldn't finish: {}".format(ex)
             showMsgBoxOrErr(
-                "Run couldn't finish: {}".format(ex),
+                get_traceback(),
                 try_gui=try_gui,
             )
+        # ^ IF commenting bare Exception, the caller must show output.
         return 1
     elif mode == MODE_CS:
         Name = os.path.splitext(os.path.split(path)[-1])[0]
