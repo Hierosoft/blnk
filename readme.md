@@ -65,8 +65,4 @@ rm ~/Desktop/blnk.desktop
 ```
 
 ## Development
-
-### Copypasta
-```
-grep "Encoding" -n -r /home/owner/.local/share/applications
-```
+See [doc/development.md](doc/development.md).
