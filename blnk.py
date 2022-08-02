@@ -7,14 +7,17 @@ import platform
 import subprocess
 import traceback
 python_mr = sys.version_info.major
+ENABLE_TK = False
 if python_mr == 3:
-    # import tkinter as tk
+    import tkinter as tk
     # from tkinter import ttk
     from tkinter import messagebox
+    ENABLE_TK = True
 else:
-    # import Tkinter as tk
+    import Tkinter as tk
     # import ttk
     import tkMessageBox as messagebox
+    ENABLE_TK = True
 
 verbosity = 0
 
@@ -226,18 +229,15 @@ if os.path.isdir(os.path.join(profile, "Nextcloud")):
 # The replacements are mixed since the blnk file may have come from
 #   another OS:
 substitutions = {
-    "%USER%": username,
-    "%USERPROFILE%": profile,
-    "%PROFILESFOLDER%": profiles,
+    "%APPDATA%": AppData,
+    "$HOME": profile,
+    "%LOCALAPPDATA%": local,
     "%MYDOCS%": os.path.join(profile, "Documents"),
     "%MYDOCUMENTS%": os.path.join(profile, "Documents"),
-    "%APPDATA%": AppData,
-    "%LOCALAPPDATA%": local,
+    "%PROFILESFOLDER%": profiles,
+    "%USER%": username,
+    "%USERPROFILE%": profile,
     "%TEMP%": temporaryFiles,
-    "%MYDOCS%": os.path.join(profile, "Documents"),
-    "%APPDATA%": AppData,
-    "$USER": username,
-    "$HOME": profile,
     "~": profile,
 }
 # endregion same as world_clock (Poikilos' fork)
@@ -453,7 +453,7 @@ class BLink:
             section = trySection
             if len(section) < 1:
                 pre = ""  # This is a comment prefix for debugging.
-                if lineN is not None:
+                if row is not None:
                     if self.path is not None:
                         pre = self.path + ":"
                         if row is not None:
@@ -528,7 +528,6 @@ class BLink:
         return section, v
 
     def getExec(self, key="Exec"):
-        result = None
         trySection = BLink.NO_SECTION
         section, v = self.getBranch(trySection, key)
         if v is None:
@@ -709,8 +708,8 @@ class BLink:
             )
         except FileNotFoundError as ex:
             raise FileNotFoundError(
-                "The file was not found: "
-                " {}".format(cmdjoin(parts), ex),
+                'The file was not found: '
+                ' {} ({})'.format(cmdjoin(parts), ex),
             )
         except Exception as ex:
             raise ex
@@ -757,10 +756,12 @@ class BLink:
             return BLink._run_parts([thisOpenCmd, path], check=True)
         except OSError as ex:
             try:
+                echo0(str(ex))
                 thisOpenCmd = "open"
                 print("  - thisOpenCmd={}...".format(thisOpenCmd))
                 return BLink._run_parts([thisOpenCmd, path], check=True)
-            except OSError as ex:
+            except OSError as ex2:
+                echo0(str(ex2))
                 thisOpenCmd = "xdg-launch"
                 print("  - trying {}...".format(thisOpenCmd))
                 return BLink._run_parts([thisOpenCmd, path], check=True)
@@ -814,9 +815,9 @@ dtLines = [
 #   - This is for blnk itself. For blnk files, see blnkTemplate.
 
 
-
 def usage():
     print(__doc__)
+
 
 def create_icon():
     print("* checking for \"{}\"".format(dtPath))
@@ -841,107 +842,173 @@ def create_icon():
                 echo0(str(cmdParts))
 
 
+def run_file(path, options):
+    '''
+    Sequential arguments:
+    options -- You must at least set:
+        'interactive': Try to show a tk messagebox for errors if True.
+
+    Returns:
+    If OK return 0, otherwise another int.
+    '''
+    try:
+        link = BLink(path)
+        link.run()
+        # ^ init and run are in the same context in case construct
+        #   fails.
+        return 0
+    except FileTypeError:
+        pass
+        # already handled by Blink
+    except FileNotFoundError as ex:
+        showMsgBoxOrErr(
+            "The file was not found: {}".format(ex),
+            try_gui=options['interactive'],
+        )
+    except Exception as ex:
+        # msg = "Run couldn't finish: {}".format(ex)
+        showMsgBoxOrErr(
+            get_traceback(),
+            try_gui=options['interactive'],
+        )
+    # ^ IF commenting bare Exception, the caller must show output.
+    return 1
+
+
+def create_shortcut_file(target, options, target_key="Exec"):
+    '''
+    Sequential arguments:
+    options -- Define values for the shortcut using keys that are the same
+        names as used in XDG shortcut format. You must at least set:
+        'Terminal' (True will be changed to "true", False to "false"), 'Type',
+        'interactive': Try to show a tk messagebox for errors if True.
+        (Name will be generated from target's ending if None).
+
+    Keyword arguments:
+    target_key -- Set this to 'URL' if targtet is a URL.
+
+    Returns:
+    If OK return 0, otherwise another int.
+
+    '''
+    valid_target_keys = ["Exec", "URL"]
+    if target_key not in valid_target_keys:
+        raise ValueError("target_key is '{}' but should be among: {}"
+                         "".format(target_key, valid_target_keys))
+    if options.get('Name') is None:
+        if target_key == "URL":
+            raise ValueError("You must provide a 'Name' option for a URL.")
+        options["Name"] = os.path.splitext(os.path.split(target)[-1])[0]
+    newName = options["Name"] + ".blnk"
+    newPath = newName
+    if options.get('Type') is None:
+        raise KeyError("Type is required.")
+    if options.get('Terminal') is None:
+        raise KeyError(
+            'Terminal (with value True, False, "true" or "false" is required'
+        )
+    if options['Terminal'] is True:
+        options['Terminal'] = "true"
+    elif options['Terminal'] is False:
+        options['Terminal'] = "false"
+    # ^ Use the current directory, so do not use the full path.
+    if target_key == "Exec":
+        content = blnkTemplate.format(
+            Type=options["Type"],
+            Name=options["Name"],
+            Exec=target,
+            Terminal=options["Terminal"],
+    )
+    elif target_key == "URL":
+        content = blnkURLTemplate.format(
+            Type=options["Type"],
+            Name=options["Name"],
+            URL=target,
+            Terminal=options["Terminal"],
+        )
+    else:
+        raise NotImplementedError("target_key={}".format(target_key))
+    # echo0(content)
+    if os.path.exists(newPath):
+        echo0("Error: {} already exists.".format(newPath))
+        return 1
+    with open(newPath, 'w') as outs:
+        outs.write(content)
+    print("* wrote \"{}\"".format(newPath))
+    return 0
+
+
 def main(args):
     # create_icon()
     if len(args) < 2:
         usage()
-        raise ValueError("Error: The first argument is the program but"
-                         " there is no argument after that. Provide a"
-                         " file path.")
+        raise ValueError(
+            "Error: The first argument is the program but"
+            " there is no argument after that. Provide a"
+            " file path."
+        )
     MODE_RUN = "run"
     MODE_CS = "create shortcut"
     mode = MODE_RUN
     path = None
-    Terminal = "false"
     options = {}
     options["interactive"] = True
+    options["Terminal"] = "false"
     for i in range(1, len(args)):
         arg = args[i]
         if arg == "-s":
             mode = MODE_CS
         elif arg == "--terminal":
-            Terminal = "true"
+            options["Terminal"] = "true"
         elif arg in ["--non-interactive", "-y"]:
             options["interactive"] = False
         else:
             if path is None:
                 path = arg
+            elif options.get('Name') is None:
+                options['Name'] = arg
+                echo0('Name="{}"'.format(options['Name']))
             else:
                 raise ValueError("The option \"{}\" is unknown and the"
                                  " path was already \"{}\""
                                  "".format(arg, path))
-    try_gui = options["interactive"]
     if path is None:
         usage()
         echo0("Error: The path was not set (args={}).".format(args))
         return 1
-    Type = None
-    targetKey = "Exec"
+    options["Type"] = None
+    target_key = "Exec"
     if os.path.isdir(path):
-        Type = "Directory"
+        options["Type"] = "Directory"
     elif os.path.isfile(path):
-        Type = "File"
+        options["Type"] = "File"
     elif is_url(path):
-        Type = "Link"
-        targetKey = "URL"
-    if Type is None:
+        options["Type"] = "Link"
+        target_key = "URL"
+        if options.get('Name') is None:
+            showMsgBoxOrErr(
+                ('Error: Please provide a name for the shortcut'
+                 ' after the URL "{}".'.format(path)),
+                try_gui=options["interactive"],
+            )
+            return 1
+    if options["Type"] is None:
         usage()
         showMsgBoxOrErr(
             "Error: The path \"{}\" is not a file or directory"
             " (args={}).".format(path, args),
-            try_gui=try_gui,
+            try_gui=options["interactive"],
         )
         return 1
-
     if mode == MODE_RUN:
-        try:
-            link = BLink(path)
-            link.run()
-            # ^ init and run are in the same context in case construct
-            #   fails.
-            return 0
-        except FileTypeError:
-            pass
-            # already handled by Blink
-        except FileNotFoundError as ex:
-            showMsgBoxOrErr(
-                "The file was not found: {}".format(ex),
-                try_gui=try_gui,
-            )
-        except Exception as ex:
-            msg = "Run couldn't finish: {}".format(ex)
-            showMsgBoxOrErr(
-                get_traceback(),
-                try_gui=try_gui,
-            )
-        # ^ IF commenting bare Exception, the caller must show output.
-        return 1
+        return run_file(path, options)
     elif mode == MODE_CS:
-        Name = os.path.splitext(os.path.split(path)[-1])[0]
-        newName = Name + ".blnk"
-        newPath = newName
-        # ^ Use the current directory, so do not use the full path.
-        if targetKey == "Exec":
-            content = blnkTemplate.format(Type=Type, Name=Name,
-                                          Exec=path,
-                                          Terminal=Terminal)
-        elif targetKey == "URL":
-            content = blnkURLTemplate.format(Type=Type, Name=Name,
-                                             URL=path,
-                                             Terminal=Terminal)
-        else:
-            raise NotImplementedError("targetKey={}".format(targetKey))
-        # echo0(content)
-        if os.path.exists(newPath):
-            echo0("Error: {} already exists.".format(newPath))
-            return 1
-        with open(newPath, 'w') as outs:
-            outs.write(content)
-        print("* wrote \"{}\"".format(newPath))
+        return create_shortcut_file(path, options, target_key=target_key)
     else:
         raise NotImplementedError("The mode \"{}\" is not known."
                                   "".format(mode))
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
