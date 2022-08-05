@@ -22,6 +22,21 @@ else:
     import tkMessageBox as messagebox
     ENABLE_TK = True
 
+associations = {
+    ".kdb": ["keepassxc"],
+    ".kdbx": ["keepassxc"],
+    ".nja": ["ninja-ide", "-p"],  # required for opening project files
+    ".csv": ["libreoffice", "--calc"],
+    ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64", "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
+}
+# ^ Each value can be a string or list.
+# ^ Besides associations there is also a special case necessary for
+#   ninja-ide to change the file to the containing folder (See
+#   associations code further down).
+settings = {
+    "file_type_associations": associations,
+}
+
 verbosity = 0
 
 for argI in range(1, len(sys.argv)):
@@ -530,6 +545,11 @@ class BLink:
                     break
         return section, v
 
+    def get(self, key):
+        trySection = BLink.NO_SECTION
+        section, v = self.getBranch(trySection, key)
+        return v
+
     def getExec(self, key="Exec"):
         trySection = BLink.NO_SECTION
         section, v = self.getBranch(trySection, key)
@@ -537,18 +557,18 @@ class BLink:
             path = self.path
             if path is not None:
                 path = "\"" + path + "\""
-            echo0("WARNING: There was no \"{}\" variable in {}"
-                  "".format(key, path))
-            return None
+            msg = ("WARNING: There was no \"{}\" variable in {}"
+                   "".format(key, path))
+            return None, msg
         elif section != trySection:
             sectionMsg = section
             if section == BLink.NO_SECTION:
                 sectionMsg = "the main section"
             else:
                 sectionMsg = "[{}]".format(section)
-            echo0("WARNING: \"{}\" was in {}".format(key, sectionMsg))
+            msg = "WARNING: \"{}\" was in {}".format(key, sectionMsg)
         if v is None:
-            return None
+            return None, msg
         path = v
 
         if platform.system() == "Windows":
@@ -665,7 +685,7 @@ class BLink:
         if path != v:
             print("  [blnk] changing \"{}\" to"
                   " \"{}\"".format(v, path))
-        return path
+        return path, None
 
     @staticmethod
     def _run_parts(parts, check=True):
@@ -731,11 +751,14 @@ class BLink:
         '''
         return 0
     @staticmethod
-    def _run(path):
+    def _run(path, Type="File"):
         tryCmd = "xdg-open"
         # TODO: try os.popen('open "{}"') on mac
         # NOTE: %USERPROFILE%, $HOME, ~, or such should already be
         #   replaced by getExec.
+        this_exists = os.path.isfile
+        if Type == "Directory":
+            this_exists = os.path.isdir
         if platform.system() == "Windows":
             if (len(path) >= 2) and (path[1] == ":"):
                 if not os.path.exists(path):
@@ -748,7 +771,7 @@ class BLink:
             return 0
         thisOpenCmd = None
         if not "://" in path:
-            if not os.path.isfile(path):
+            if not this_exists(path):
                 raise FileNotFoundError(
                     '"{}"'
                     ''.format(path)
@@ -781,28 +804,49 @@ class BLink:
         app = "geany"
         # If you set blnk to handle unknown files:
         more_parts = []
-        if path.lower().endswith(".kdb"):
-            app = "keepassxc"
-        elif path.lower().endswith(".kdbx"):
-            app = "keepassxc"
-        elif path.lower().endswith(".nja"):
-            app = "ninja-ide"
-            more_parts = ["-p"]  # required for running project files
+        orig_app = app
+        more_missing = []
+        for dotExt, args in associations.items():
+            if path.lower().endswith(dotExt):
+                if isinstance(args, list):
+                    app = args[0]
+                    more_parts = args[1:]
+                else:
+                    app = args
+                if which(app) is not None:
+                    break
+                else:
+                    more_missing.append(app)
+                # else keep looking for other options
+        if which(app) is None:
+            dotExt = os.path.splitext(path)[1]
+            missing_msg = ""
+            if len(more_missing) > 0:
+                missing_msg = " (and any of: {})".format(more_missing)
+            print('    Warning: "{}"{} is missing so {} will open {}.'
+                  ''.format(app, missing_msg, orig_app, dotExt))
+            app = orig_app
+            more_parts = []
+        if path.lower().endswith(".nja"):
             path = os.path.split(path)[0]
             # ^ With the -p option, Ninja-IDE will only open a directory
-            #   (with or without an nja file) not the nja file itself.
+            #   (with or without an nja, but not the nja file directly).
         print("    - app={}".format(app))
         return BLink._run_parts([app] + more_parts + [path])
 
     def run(self):
-        url = self.getExec(key="URL")
+        url, err = self.getExec(key="URL")
         if url is not None:
             return BLink._run(url)
-        execStr = self.getExec()
+        execStr, err = self.getExec()
+        if err is not None:
+            echo0(err)
         if execStr is None:
-            echo0("* Exec is None...")
+            # echo0("* Exec is None...")
+            # echo0("Trying _choose_app...")
             return self._choose_app(self.path)
-        return BLink._run(execStr)
+        # echo0("Trying _run...")
+        return BLink._run(execStr, Type=self.get("Type"))
 
 dtLines = [
     "[Desktop Entry]",
@@ -922,7 +966,7 @@ def create_shortcut_file(target, options, target_key="Exec"):
         options['Terminal'] = "false"
     # ^ Use the current directory, so do not use the full path.
     mtime = None
-    if os.path.isfile(target):
+    if os.path.isfile(target) or os.path.isdir(target):
         mtime_ts = pathlib.Path(target).stat().st_mtime
         mtime = datetime.fromtimestamp(mtime_ts)
         # ^ stat raises FileNotFoundError if path is not an existing file.
