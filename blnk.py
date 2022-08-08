@@ -7,11 +7,11 @@ import platform
 import subprocess
 import traceback
 import pathlib
+import shlex
 from datetime import datetime
 
-python_mr = sys.version_info.major
 ENABLE_TK = False
-if python_mr == 3:
+if sys.version_info.major >= 3:
     import tkinter as tk
     # from tkinter import ttk
     from tkinter import messagebox
@@ -25,6 +25,7 @@ else:
 associations = {
     ".kdb": ["keepassxc"],
     ".kdbx": ["keepassxc"],
+    ".pyw": ["python"],
     ".nja": ["ninja-ide", "-p"],  # required for opening project files
     ".csv": ["libreoffice", "--calc"],
     ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64", "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
@@ -327,7 +328,8 @@ def cmdjoin(parts):
     return cmd
 
 
-def showMsgBoxOrErr(msg, title="Blnk (Python {})".format(python_mr),
+def showMsgBoxOrErr(msg,
+                    title="Blnk (Python {})".format(sys.version_info.major),
                     try_gui=True):
     # from tkinter import messagebox
     echo0("{}\nusing {}".format(msg, title))
@@ -706,7 +708,7 @@ class BLink:
         else:
             print("  - using Python 2 subprocess.check_call"
                   " from Python {}"
-                  "".format(python_mr))
+                  "".format(sys.version_info.major))
             # check_call requires a full path (!):
             if not os.path.isfile(parts[0]):
                 part0 = which(parts[0], more_paths=[localBinPath])
@@ -730,6 +732,7 @@ class BLink:
                 " {}".format(cmdjoin(parts), pathMsg, ex),
             )
         except FileNotFoundError as ex:
+            echo0(get_traceback())
             raise FileNotFoundError(
                 'The file was not found: '
                 ' {} ({})'.format(cmdjoin(parts), ex),
@@ -751,61 +754,81 @@ class BLink:
         '''
         return 0
     @staticmethod
-    def _run(path, Type="File"):
+    def _run(Exec, Type):
+        '''
+        This is a static method, so any object members must be sent.
+
+        Run the correct path automatically using the Type variable from
+        the blnk file (Type can be Directory, File, OR Application).
+        Note that the "Path" key sets the working directory NOT the
+        target, but the Exec argument is equivalent to "Exec".
+        '''
         tryCmd = "xdg-open"
         # TODO: try os.popen('open "{}"') on mac
         # NOTE: %USERPROFILE%, $HOME, ~, or such should already be
         #   replaced by getExec.
         this_exists = os.path.isfile
+        execParts = shlex.split(Exec)
+        if len(execParts) > 1:
+            Exec = execParts[0]
         if Type == "Directory":
             this_exists = os.path.isdir
+        elif Type == "Application":
+            return BLink._run_parts(execParts, check=True)
         if platform.system() == "Windows":
-            if (len(path) >= 2) and (path[1] == ":"):
-                if not os.path.exists(path):
+            if (len(Exec) >= 2) and (Exec[1] == ":"):
+                if not os.path.exists(Exec):
                     raise FileNotFoundError(
-                        "The path doesn't exist: {}"
-                        "".format(path)
+                        "The Exec target doesn't exist: {}"
+                        "".format(Exec)
                     )
-            os.startfile(path, 'open')
-            # run_fn('cmd /c start "{}"'.format(path))
+            os.startfile(Exec, 'open')
+            # run_fn('cmd /c start "{}"'.format(Exec))
             return 0
         thisOpenCmd = None
-        if not "://" in path:
-            if not this_exists(path):
+        if not "://" in Exec:
+            if not this_exists(Exec):
                 raise FileNotFoundError(
                     '"{}"'
-                    ''.format(path)
+                    ''.format(Exec)
                 )
         try:
             thisOpenCmd = tryCmd
             print("  - thisOpenCmd={}...".format(thisOpenCmd))
-            return BLink._run_parts([thisOpenCmd, path], check=True)
+            return BLink._run_parts([thisOpenCmd, Exec], check=True)
         except OSError as ex:
             try:
                 echo0(str(ex))
                 thisOpenCmd = "open"
                 print("  - thisOpenCmd={}...".format(thisOpenCmd))
-                return BLink._run_parts([thisOpenCmd, path], check=True)
+                return BLink._run_parts([thisOpenCmd, Exec], check=True)
             except OSError as ex2:
                 echo0(str(ex2))
                 thisOpenCmd = "xdg-launch"
                 print("  - trying {}...".format(thisOpenCmd))
-                return BLink._run_parts([thisOpenCmd, path], check=True)
+                return BLink._run_parts([thisOpenCmd, Exec], check=True)
         except subprocess.CalledProcessError as ex:
             # raise subprocess.CalledProcessError(
-            #     "{} couldn't open the path: \"{}\""
-            #     "".format(thisOpenCmd, path)
+            #     "{} couldn't open the Exec target: \"{}\""
+            #     "".format(thisOpenCmd, Exec)
             # )
             raise ex
         return 1  # This should never happen.
 
     def _choose_app(self, path):
+        '''
+        Choose an application if either it isn't a blnk file at all or
+        Type is "File" (only use _run instead of _choose_app if Type is
+        Application).
+        '''
+        global settings
         print("  - choosing app for \"{}\"".format(path))
         app = "geany"
         # If you set blnk to handle unknown files:
         more_parts = []
         orig_app = app
         more_missing = []
+        associations = settings['file_type_associations']
         for dotExt, args in associations.items():
             if path.lower().endswith(dotExt):
                 if isinstance(args, list):
@@ -837,7 +860,7 @@ class BLink:
     def run(self):
         url, err = self.getExec(key="URL")
         if url is not None:
-            return BLink._run(url)
+            return BLink._run(url, self.get("Type"))
         execStr, err = self.getExec()
         if err is not None:
             echo0(err)
@@ -845,8 +868,13 @@ class BLink:
             # echo0("* Exec is None...")
             # echo0("Trying _choose_app...")
             return self._choose_app(self.path)
+        elif self.get("Type") == "File":
+            return self._choose_app(execStr)
+        # else only Run the execStr if type is Application!
         # echo0("Trying _run...")
-        return BLink._run(execStr, Type=self.get("Type"))
+        return BLink._run(execStr, self.get("Type"))
+        # ^ Type is detected automatically.
+
 
 dtLines = [
     "[Desktop Entry]",
@@ -906,6 +934,7 @@ def run_file(path, options):
     '''
     try:
         link = BLink(path)
+        # ^ This path is the blnk file, not its target.
         link.run()
         # ^ init and run are in the same context in case construct
         #   fails.
@@ -914,8 +943,9 @@ def run_file(path, options):
         pass
         # already handled by Blink
     except FileNotFoundError as ex:
+        # echo0(get_traceback())
         showMsgBoxOrErr(
-            "The file was not found: {}".format(ex),
+            "The file was not found: {} {}".format(ex, get_traceback()),
             try_gui=options['interactive'],
         )
     except Exception as ex:
