@@ -25,13 +25,17 @@ else:
     import tkMessageBox as messagebox
     ENABLE_TK = True
 
+# Handle issues where the OS considers "BLNK" and all of these file
+#   extensions as "text/plain" rather than allowing them to be
+#   associated with separate programs.
 associations = {
     ".kdb": ["keepassxc"],
     ".kdbx": ["keepassxc"],
     ".pyw": ["python"],
     ".nja": ["ninja-ide", "-p"],  # required for opening project files
     ".csv": ["libreoffice", "--calc"],
-    ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64", "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
+    ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
+             "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
 }
 # ^ Each value can be a string or list.
 # ^ Besides associations there is also a special case necessary for
@@ -58,6 +62,7 @@ def which(program, more_paths=[]):
     #     https://stackoverflow.com/questions/377017/
     #     test-if-executable-exists-in-python
     import os
+
     def is_exe(fpath):
         # The fpath param name DIFFERS since it is an inline function.
         return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
@@ -91,6 +96,63 @@ def echo2(*args, **kwargs):
         return False
     print(*args, file=sys.stderr, **kwargs)
     return True
+
+
+# region same as pycodetool
+# syntax_error_fmt = "{path}:{row}:{column}: {message}"
+syntax_error_fmt = 'File "{path}", line {row}, {column} {message}'
+# ^ such as (Python-style, so readable by Geany):
+'''
+  File "/redacted/git/pycodetool/pycodetool/spec.py", line 336, in read_spec
+'''
+
+
+def set_syntax_error_fmt(fmt):
+    global syntax_error_fmt
+    syntax_error_fmt = fmt
+
+
+def to_syntax_error(path, lineN, msg, col=None):
+    '''
+    Convert the error to a syntax error that specifies the file and line
+    number that has the bad syntax.
+
+    Keyword arguments:
+    col -- is the character index relative to the start of the line,
+        starting at 1 for compatibility with outputinspector (which will
+        subtract 1 if using editors that start at 0).
+    '''
+    this_fmt = syntax_error_fmt
+
+    if col is None:
+        part = "{column}"
+        removeI = this_fmt.find(part)
+        if removeI > -1:
+            suffixI = removeI + len(part) + 1
+            # ^ +1 to get punctuation!
+            this_fmt = this_fmt[:removeI] + this_fmt[suffixI:]
+    if lineN is None:
+        part = "{row}"
+        removeI = this_fmt.find(part)
+        if removeI > -1:
+            suffixI = removeI + len(part) + 1
+            # ^ +1 to get punctuation!
+            this_fmt = this_fmt[:removeI] + this_fmt[suffixI:]
+    return this_fmt.format(path=path, row=lineN, column=col, message=msg)
+    # ^ Settings values not in this_fmt is ok.
+
+
+def echo_SyntaxWarning(path, lineN, msg, col=None):
+    msg = to_syntax_error(path, lineN, msg, col=col)
+    echo0(msg)
+    # ^ So the IDE can try to parse what path&line has an error.
+
+
+def raise_SyntaxError(path, lineN, msg, col=None):
+    echo_SyntaxWarning(path, lineN, msg, col=col)
+    raise SyntaxError(msg)
+
+# endregion same as pycodetool
 
 
 def get_traceback(indent=""):
@@ -194,6 +256,7 @@ symbols.
 class FileTypeError(Exception):
     pass
 
+
 profile = None
 
 # region same as world_clock (Poikilos' fork)
@@ -268,6 +331,7 @@ substitutions = {
 }
 # endregion same as world_clock (Poikilos' fork)
 
+
 def is_url(path):
     path = path.lower()
     endProtoI = path.find("://")
@@ -310,7 +374,7 @@ def replace_isolated(path, old, new, case_sensitive=True):
 
 
 def replace_vars(path):
-    for old,new in substitutions.items():
+    for old, new in substitutions.items():
         if old.startswith("%") and old.endswith("%"):
             path = path.replace(old, new)
         else:
@@ -386,7 +450,13 @@ class BLink:
         except FileTypeError as ex:
             raise ex
 
-    def splitLine(self, line):
+    def splitLine(self, line, path=None, row=None):
+        '''
+        Keyword arguments:
+        path -- The source of the data (only for tracing errors).
+        row -- The source of the data in the file named path (only for
+            tracing errors).
+        '''
         i = line.find(self.assignmentOperator)
         if i < 0:
             tmpI = line.find(':')
@@ -400,13 +470,17 @@ class BLink:
                     echo0("* reverting to deprecated ':' operator")
                     i = tmpI
                 else:
-                    echo0("WARNING: The line contains no '=', but ':'"
-                          " seems like a path since it is followed by"
-                          " \\ not \\\\")
+                    echo_SyntaxWarning(
+                        path,
+                        row,
+                        "WARNING: The line contains no '=', but ':'"
+                        " seems like a path since it is followed by"
+                        " \\ not \\\\",
+                    )
         if i < 0:
-            raise ValueError("The line contains no '{}': `{}`"
-                             "".format(self.assignmentOperator,
-                                       line))
+            raise_SyntaxError(path, row,
+                              "The line contains no '{}': `{}`"
+                              "".format(self.assignmentOperator, line))
         ls = line.strip()
         if self.isComment(ls):
             raise ValueError("splitLine doesn't work on comments.")
@@ -416,9 +490,13 @@ class BLink:
         v = line[i+len(self.assignmentOperator):].strip()
         if self.commentDelimiter in v:
             # if k != "URL":
-            echo1("WARNING: `{}` contains a comment delimiter '{}'"
-                  " but inline comments are not supported."
-                  "".format(line, self.commentDelimiter))
+            echo_SyntaxWarning(
+                path,
+                row,
+                "WARNING: `{}` contains a comment delimiter '{}'"
+                " but inline comments are not supported."
+                "".format(line, self.commentDelimiter),
+            )
             # URL may have a # that is not a comment.
             # If the URL blnk file was automatically generated such as
             #   with the blnk -s command, then the Name and Comment will
@@ -438,12 +516,16 @@ class BLink:
     def isComment(self, line):
         return line.strip().startswith(self.commentDelimiter)
 
-    def _pushLine(self, line, row=None, col=None):
+    def _pushLine(self, rawL, row=None, col=None, path=None):
         '''
         Keyword arguments
+        path -- Show this path in syntax messages.
         row -- Show this row (such as line_index+1) in syntax messages.
         col -- Show this col (such as char_index+1) in syntax messages.
         '''
+        line = rawL.strip()
+        if len(line) < 1:
+            return
         if row is None:
             if self.lastSection is not None:
                 echo0("WARNING: The line `{}` was a custom line not on"
@@ -489,11 +571,15 @@ class BLink:
                                 pre += str(col) + ":"
                 if len(pre) > 0:
                     pre += " "
-                raise ValueError(pre+"_pushLine got an empty section")
+                raise raise_SyntaxError(
+                    path,
+                    row,
+                    pre+"_pushLine got an empty section",
+                )
             else:
                 self.lastSection = section
         else:
-            k, v = self.splitLine(line)
+            k, v = self.splitLine(line, path=path, row=row)
             '''
             if k == "Content-Type":
                 self.contentType = v
@@ -516,7 +602,7 @@ class BLink:
                 for line in ins:
                     row += 1
                     try:
-                        self._pushLine(line, row=row)
+                        self._pushLine(line, path=path, row=row)
                     except FileTypeError as ex:
                         # Do not produce error messages for the bash
                         # script to show in the GUI since this is
@@ -760,6 +846,7 @@ class BLink:
                 raise ex
         '''
         return 0
+
     @staticmethod
     def _run(Exec, Type):
         '''
@@ -793,7 +880,7 @@ class BLink:
             # run_fn('cmd /c start "{}"'.format(Exec))
             return 0
         thisOpenCmd = None
-        if not "://" in Exec:
+        if "://" not in Exec:
             if not this_exists(Exec):
                 raise FileNotFoundError(
                     '"{}"'
@@ -1037,7 +1124,7 @@ def create_shortcut_file(target, options, target_key="Exec"):
             Terminal=options["Terminal"],
             mtime=mtime,
             ctime=ctime,
-    )
+        )
     elif target_key == "URL":
         content = blnkURLTemplate.format(
             Type=options["Type"],
