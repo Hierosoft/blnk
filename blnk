@@ -22,10 +22,26 @@ if [ $code -ne 0 ]; then
 You have Python but not tkinter, so you must be on a Debian-based distro. First try: sudo apt-get install python3-tk
 END
     err_line_count=`wc -l < $logsDir/err.log`
+    printf "Showing a GUI dialog box..."
     if [ $err_line_count -gt 0 ]; then
-        xmessage -file $logsDir/err.log
+        xmessage -file "$logsDir/err.log"
+        if [ $? -ne 0 ]; then
+            echo "FAILED (xmessage didn't work. See the message below instead.)"
+            echo
+            cat "$logsDir/err.log"
+        else
+            echo "OK"
+        fi
     else
-        xmessage "Blnk had an unrecorded error. See $logsDir/out.log for information about the last run."
+        msg="Blnk had an unrecorded error. See $logsDir/out.log for information about the last run."
+        xmessage "$msg"
+        if [ $? -ne 0 ]; then
+            echo "FAILED (xmessage didn't work. See the message below instead.)"
+            echo
+            echo "$msg"
+        else
+            echo "OK"
+        fi
     fi
     exit $code
 fi
