@@ -44,4 +44,9 @@ END
         fi
     fi
     exit $code
+else
+    err_line_count=`wc -l < "$logsDir/err.log"`
+    if [ $err_line_count -gt 0 ]; then
+        cat "$logsDir/err.log"
+    fi
 fi
