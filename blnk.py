@@ -1210,9 +1210,14 @@ def main(args):
         options["Type"] = "Link"
         target_key = "URL"
         if options.get('Name') is None:
+            echo1("got: {}".format(sys.argv))
+            amp_msg = ('If the URL has an ampersand, quote the URL\n'
+                       ' to prevent the URL from cutting off such as\n'
+                       ' if that is not the complete URL you entered.'
+                       ''.format(path))
             showMsgBoxOrErr(
                 ('Error: Please provide a name for the shortcut'
-                 ' after the URL "{}".'.format(path)),
+                 ' after the URL\n "{}"\n ({}).'.format(path, amp_msg)),
                 try_gui=options["interactive"],
             )
             return 1
