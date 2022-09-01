@@ -815,8 +815,19 @@ class BLink:
         return path, None
 
     @staticmethod
-    def _run_parts(parts, check=True):
-        print("* running \"{}\"...".format(parts))
+    def _run_parts(parts, check=True, working_dir=None):
+        '''
+        Run a command (list of command and args) directly using the best
+        call depending on the Python version.
+
+        Keyword arguments:
+        working_dir -- Change to this working directory first. This
+            should not usually be set to anything except the Path field
+            of a .blnk (or .desktop) file.
+        '''
+        if working_dir is not None:
+            os.chdir(working_dir)
+        print('* running "{}" (in "{}")...'.format(parts, os.getcwd()))
         run_fn = subprocess.check_call
         use_check = False
         if hasattr(subprocess, 'run'):
@@ -948,6 +959,11 @@ class BLink:
         Application).
         '''
         global settings
+        working_dir = None
+        # working_dir = os.path.dirname(os.path.realpath(self.path))
+        # print('  - set working_dir="{}"'.format(working_dir))
+        # ^ Leave working_dir as None since it should only be set by
+        #   the 'Path' key of the shortcut.
         print("  - choosing app for \"{}\"".format(path))
         app = "geany"
         # If you set blnk to handle unknown files:
@@ -995,9 +1011,15 @@ class BLink:
             #   (with or without an nja, but not the nja file directly).
         print("    - app={}".format(app))
         if cmd_parts is None:
-            return BLink._run_parts([app] + more_parts + [path])
+            return BLink._run_parts(
+                [app] + more_parts + [path],
+                working_dir=working_dir,
+            )
         else:
-            return BLink._run_parts(cmd_parts)
+            return BLink._run_parts(
+                cmd_parts,
+                working_dir=working_dir,
+                )
 
     def run(self):
         url, err = self.getExec(key="URL")
