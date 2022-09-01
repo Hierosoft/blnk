@@ -34,6 +34,7 @@ associations = {
     ".kdb": ["keepassxc"],
     ".kdbx": ["keepassxc"],
     ".pyw": ["python"],
+    ".py": ["python"],
     ".nja": ["ninja-ide", "-p"],  # required for opening project files
     ".csv": ["libreoffice", "--calc"],
     ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
@@ -455,6 +456,19 @@ class BLink:
         except FileTypeError as ex:
             raise ex
 
+    def getAbs(self, path):
+        rawPath = path
+        if not os.path.exists(path):
+            # See if it is relative to the blnk file.
+            tryPath = os.path.join(os.path.dirname(self.path), path)
+            if os.path.exists(tryPath):
+                # path = os.path.realpath(tryPath)
+                path = os.path.abspath(tryPath)
+                print('* redirecting "{}" to "{}"'.format(rawPath, path))
+        else:
+            path = os.path.abspath(path)
+        return path
+
     def splitLine(self, line, path=None, row=None):
         '''
         Keyword arguments:
@@ -782,6 +796,19 @@ class BLink:
         path = replace_vars(path)
         path = replace_isolated(path, statedCloud, myCloud,
                                 case_sensitive=False)
+
+        old_parts = shlex.split(path)
+        # if not os.path.exists(old_parts[0]):
+        abs0 = self.getAbs(old_parts[0])
+        if old_parts[0] == abs0:
+            print('  [blnk] "{}"'
+                  ' wasn\'t an existing absolute or relative path"'
+                  ''.format(old_parts[0]))
+        old_parts[0] = abs0
+        path = shlex.join(old_parts)
+        # else:
+        #    print('* using existing relative target "{}"'.format(old_parts))
+
         if path != v:
             print("  [blnk] changing \"{}\" to"
                   " \"{}\"".format(v, path))
@@ -926,6 +953,7 @@ class BLink:
         # If you set blnk to handle unknown files:
         more_parts = []
         orig_app = app
+        cmd_parts = None
         more_missing = []
         associations = settings['file_type_associations']
         for dotExt, args in associations.items():
@@ -940,6 +968,18 @@ class BLink:
                 else:
                     more_missing.append(app)
                 # else keep looking for other options
+                cmd_parts = [app] + more_parts + [path]
+
+        # shlex.split is NOT necessary since _choose_app should
+        # NOT run for executables (Type=Application).
+
+        '''
+        absPath = self.getAbs(path)
+        if os.path.splitext(path)[1] == "" and os.access(absPath, os.X_OK):
+            # app = path
+            # more_parts = []
+            cmd_parts =
+        '''
         if which(app) is None:
             dotExt = os.path.splitext(path)[1]
             missing_msg = ""
@@ -954,10 +994,14 @@ class BLink:
             # ^ With the -p option, Ninja-IDE will only open a directory
             #   (with or without an nja, but not the nja file directly).
         print("    - app={}".format(app))
-        return BLink._run_parts([app] + more_parts + [path])
+        if cmd_parts is None:
+            return BLink._run_parts([app] + more_parts + [path])
+        else:
+            return BLink._run_parts(cmd_parts)
 
     def run(self):
         url, err = self.getExec(key="URL")
+        # ^ should make it absolute if relative
         if url is not None:
             return BLink._run(url, self.get("Type"))
         execStr, err = self.getExec()
@@ -972,6 +1016,7 @@ class BLink:
         # else only Run the execStr if type is Application!
         # echo0("Trying _run...")
         return BLink._run(execStr, self.get("Type"))
+        # ^ _run should split parts (for relative, see getExec)
         # ^ Type is detected automatically.
 
 
