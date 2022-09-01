@@ -815,18 +815,19 @@ class BLink:
         return path, None
 
     @staticmethod
-    def _run_parts(parts, check=True, working_dir=None):
+    def _run_parts(parts, check=True, cwd=None):
         '''
         Run a command (list of command and args) directly using the best
         call depending on the Python version.
 
         Keyword arguments:
-        working_dir -- Change to this working directory first. This
+        cwd -- Change to this working directory first. This
             should not usually be set to anything except the Path field
             of a .blnk (or .desktop) file.
         '''
-        if working_dir is not None:
-            os.chdir(working_dir)
+        # if cwd is not None:
+        #     os.chdir(cwd)
+        # ^ Use the cwd param of run or check_call instead.
         print('* running "{}" (in "{}")...'.format(parts, os.getcwd()))
         run_fn = subprocess.check_call
         use_check = False
@@ -852,9 +853,15 @@ class BLink:
                     parts[0] = part0
         try:
             if use_check:
-                run_fn(parts, check=check)
+                if cwd is not None:
+                    run_fn(parts, check=check, cwd=cwd)
+                else:
+                    run_fn(parts, check=check)
             else:
-                run_fn(parts)
+                if cwd is not None:
+                    run_fn(parts, cwd=cwd)
+                else:
+                    run_fn(parts)
         except FileNotFoundError as ex:
             pathMsg = (" (The system path wasn't checked"
                        " since the executable part is a path)")
@@ -891,7 +898,7 @@ class BLink:
         return 0
 
     @staticmethod
-    def _run(Exec, Type):
+    def _run(Exec, Type, cwd=None):
         '''
         This is a static method, so any object members must be sent.
 
@@ -899,6 +906,10 @@ class BLink:
         the blnk file (Type can be Directory, File, OR Application).
         Note that the "Path" key sets the working directory NOT the
         target, but the Exec argument is equivalent to "Exec".
+
+        Keyword arguments:
+        cwd -- Set this to the value of the 'Path' key if present to set
+            the current working directory in the subprocess.
         '''
         tryCmd = "xdg-open"
         # TODO: try os.popen('open "{}"') on mac
@@ -911,7 +922,8 @@ class BLink:
         if Type == "Directory":
             this_exists = os.path.isdir
         elif Type == "Application":
-            return BLink._run_parts(execParts, check=True)
+            return BLink._run_parts(execParts, check=True,
+                                    cwd=cwd)
         if platform.system() == "Windows":
             if (len(Exec) >= 2) and (Exec[1] == ":"):
                 if not os.path.exists(Exec):
@@ -959,10 +971,10 @@ class BLink:
         Application).
         '''
         global settings
-        working_dir = None
-        # working_dir = os.path.dirname(os.path.realpath(self.path))
-        # print('  - set working_dir="{}"'.format(working_dir))
-        # ^ Leave working_dir as None since it should only be set by
+        cwd = None
+        # cwd = os.path.dirname(os.path.realpath(self.path))
+        # print('  - set cwd="{}"'.format(cwd))
+        # ^ Leave cwd as None since it should only be set by
         #   the 'Path' key of the shortcut.
         print("  - choosing app for \"{}\"".format(path))
         app = "geany"
@@ -1013,12 +1025,12 @@ class BLink:
         if cmd_parts is None:
             return BLink._run_parts(
                 [app] + more_parts + [path],
-                working_dir=working_dir,
+                cwd=cwd,
             )
         else:
             return BLink._run_parts(
                 cmd_parts,
-                working_dir=working_dir,
+                cwd=cwd,
                 )
 
     def run(self):
@@ -1033,11 +1045,16 @@ class BLink:
             # echo0("* Exec is None...")
             # echo0("Trying _choose_app...")
             return self._choose_app(self.path)
+            # ^ Open the file itself since it is *not* in .blnk format.
         elif self.get("Type") == "File":
             return self._choose_app(execStr)
-        # else only Run the execStr if type is Application!
+        # else only Run the execStr itself if type is Application!
         # echo0("Trying _run...")
-        return BLink._run(execStr, self.get("Type"))
+        cwd, PathErr = self.getExec(key='Path')
+        if PathErr is not None:
+            echo0(PathErr)
+        return BLink._run(execStr, self.get("Type"),
+                          cwd=cwd)
         # ^ _run should split parts (for relative, see getExec)
         # ^ Type is detected automatically.
 
