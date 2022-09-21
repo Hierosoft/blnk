@@ -801,9 +801,10 @@ class BLink:
         # if not os.path.exists(old_parts[0]):
         abs0 = self.getAbs(old_parts[0])
         if old_parts[0] == abs0:
-            print('  [blnk] "{}"'
-                  ' wasn\'t an existing absolute or relative path"'
-                  ''.format(old_parts[0]))
+            if not os.path.exists(old_parts[0]):
+                print('  [blnk] "{}"'
+                      ' wasn\'t an existing absolute or relative path"'
+                      ''.format(old_parts[0]))
         old_parts[0] = abs0
         path = shlex.join(old_parts)
         # else:
@@ -1042,11 +1043,11 @@ class BLink:
         if err is not None:
             echo0(err)
         if execStr is None:
-            # echo0("* Exec is None...")
-            # echo0("Trying _choose_app...")
+            echo0("* Exec is None so choosing app...")
             return self._choose_app(self.path)
             # ^ Open the file itself since it is *not* in .blnk format.
         elif self.get("Type") == "File":
+            echo0("* Type=File so choosing app...")
             return self._choose_app(execStr)
         # else only Run the execStr itself if type is Application!
         # echo0("Trying _run...")
