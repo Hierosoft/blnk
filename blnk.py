@@ -262,80 +262,15 @@ symbols.
 class FileTypeError(Exception):
     pass
 
-
-profile = None
-
-# region same as world_clock (Poikilos' fork)
-myDirName = "blnk"
-AppData = None
-local = None
-myLocal = None
-shortcutsDir = None
-replacements = None
-username = None
-profiles = None
-logsDir = None
-if platform.system() == "Windows":
-    username = os.environ.get("USERNAME")
-    profile = os.environ.get("USERPROFILE")
-    _unused_ = os.path.join(profile, "AppData")
-    AppData = os.path.join(_unused_, "Roaming")
-    local = os.path.join(_unused_, "Local")
-    share = local
-    myShare = os.path.join(local, myDirName)
-    shortcutsDir = os.path.join(profile, "Desktop")
-    dtPath = os.path.join(shortcutsDir, "blnk.blnk")
-    profiles = os.environ.get("PROFILESFOLDER")
-    temporaryFiles = os.path.join(local, "Temp")
-else:
-    username = os.environ.get("USER")
-    profile = os.environ.get("HOME")
-    local = os.path.join(profile, ".local")
-    share = os.path.join(local, "share")
-    myShare = os.path.join(share, "blnk")
-    if platform.system() == "Darwin":
-        # See also <https://github.com/poikilos/world_clock>
-        shortcutsDir = os.path.join(profile, "Desktop")
-        Library = os.path.join(profile, "Library")
-        AppData = os.path.join(Library, "Application Support")
-        LocalAppData = os.path.join(Library, "Application Support")
-        logsDir = os.path.join(profile, "Library", "Logs")
-        profiles = "/Users"
-        temporaryFiles = os.environ.get("TMPDIR")
-    else:
-        # GNU+Linux Systems
-        shortcutsDir = os.path.join(share, "applications")
-        AppData = os.path.join(profile, ".config")
-        LocalAppData = os.path.join(profile, ".config")
-        logsDir = os.path.join(profile, ".var", "log")
-        profiles = "/home"
-        temporaryFiles = "/tmp"
-    dtPath = os.path.join(shortcutsDir, "blnk.desktop")
-localBinPath = os.path.join(local, "bin")
-
-statedCloud = "owncloud"
-myCloud = "owncloud"
-if os.path.isdir(os.path.join(profile, "Nextcloud")):
-    myCloud = "Nextcloud"
-
-# NOTE: PATH isn't necessary to split with os.pathsep (such as ":", not
-# os.sep or os.path.sep such as "/") since sys.path is split already.
-
-# The replacements are mixed since the blnk file may have come from
-#   another OS:
-substitutions = {
-    "%APPDATA%": AppData,
-    "$HOME": profile,
-    "%LOCALAPPDATA%": local,
-    "%MYDOCS%": os.path.join(profile, "Documents"),
-    "%MYDOCUMENTS%": os.path.join(profile, "Documents"),
-    "%PROFILESFOLDER%": profiles,
-    "%USER%": username,
-    "%USERPROFILE%": profile,
-    "%TEMP%": temporaryFiles,
-    "~": profile,
-}
-# endregion same as world_clock (Poikilos' fork)
+from morefolders import (
+    replace_isolated,
+    replace_vars,
+    localBinPath,
+    profile,
+    shortcutsDir,
+    profiles,
+    temporaryFiles,
+)
 
 
 def is_url(path):
@@ -347,53 +282,13 @@ def is_url(path):
     return False
 
 
-def replace_isolated(path, old, new, case_sensitive=True):
-    '''
-    Replace old only if it is at the start or end of a path or is
-    surrounded by os.path.sep.
-    '''
-    if case_sensitive:
-        if path.startswith(old):
-            path = new + path[len(old):]
-        elif path.endswith(old):
-            path = path[:-len(old)] + new
-        else:
-            wrappedNew = os.path.sep + new + os.path.sep
-            wrappedOld = os.path.sep + old + os.path.sep
-            path = path.replace(wrappedOld, wrappedNew)
-    else:
-        if path.lower().startswith(old.lower()):
-            path = new + path[len(old):]
-        elif path.lower().endswith(old.lower()):
-            path = path[:-len(old)] + new
-        else:
-            wrappedNew = os.path.sep + new + os.path.sep
-            wrappedOld = os.path.sep + old + os.path.sep
-            at = 0
-            while at >= 0:
-                at = path.lower().find(old.lower())
-                if at < 0:
-                    break
-                restI = at + len(old)
-                path = path[:at] + new + path[restI:]
-    return path
-
-
-def replace_vars(path):
-    for old, new in substitutions.items():
-        if old.startswith("%") and old.endswith("%"):
-            path = path.replace(old, new)
-        else:
-            path = replace_isolated(path, old, new)
-    return path
-
-
 def cmdjoin(parts):
     '''
     Join parts of a command. Add double quotes to each part that
     contains spaces.
     - There is no automatic sanitization (escape sequence generation).
     '''
+    # TODO: use shlex.join
     cmd = ""
     thisDelimiter = ""
     for i in range(len(parts)):
@@ -425,7 +320,7 @@ def showMsgBoxOrErr(msg,
 
 
 myBinPath = __file__
-tryBinPath = os.path.join(local, "bin", "blnk")
+tryBinPath = os.path.join(localBinPath, "blnk")
 if os.path.isfile(tryBinPath):
     myBinPath = tryBinPath
 
@@ -437,9 +332,20 @@ class BLink:
     '''
     NO_SECTION = "\n"
     BASES = [
-        os.path.join(profile, myCloud),
         profile,
     ]
+    cloud_path = replace_vars("%CLOUD%")
+    cloud_name = None
+    echo0('cloud_path="{}"'.format(cloud_path))
+    if cloud_path is not None:
+        # myCloud = myCloudName
+        # if myCloud is None:
+        #     myCloud = "Nextcloud"
+        # os.path.join(profile, myCloud)
+        BASES.append(cloud_path)
+        cloud_name = os.path.split(cloud_path)[1]
+    echo0('cloud_name="{}"'.format(cloud_name))
+
     USERS_DIRS = ["Users", "Documents and Settings"]
 
     def __init__(self, path, assignmentOperator="=",
@@ -794,8 +700,11 @@ class BLink:
                 path = v.replace("\\", "/")
 
         path = replace_vars(path)
-        path = replace_isolated(path, statedCloud, myCloud,
-                                case_sensitive=False)
+        if BLink.cloud_name is not None:
+            for statedCloud in ["ownCloud", "owncloud"]:
+                path = replace_isolated(path, statedCloud,
+                                        BLink.cloud_name,
+                                        case_sensitive=False)
 
         old_parts = shlex.split(path)
         # if not os.path.exists(old_parts[0]):
