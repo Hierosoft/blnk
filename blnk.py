@@ -262,6 +262,7 @@ symbols.
 class FileTypeError(Exception):
     pass
 
+
 from morefolders import (
     replace_isolated,
     replace_vars,
@@ -280,24 +281,6 @@ def is_url(path):
         # TODO: Check for known protocols? Check for "file" protocol?
         return True
     return False
-
-
-def cmdjoin(parts):
-    '''
-    Join parts of a command. Add double quotes to each part that
-    contains spaces.
-    - There is no automatic sanitization (escape sequence generation).
-    '''
-    # TODO: use shlex.join
-    cmd = ""
-    thisDelimiter = ""
-    for i in range(len(parts)):
-        part = parts[i]
-        if " " in part:
-            part = '"{}"'.format(part)
-        cmd += thisDelimiter + part
-        thisDelimiter = " "
-    return cmd
 
 
 def showMsgBoxOrErr(msg,
@@ -782,13 +765,13 @@ class BLink:
             raise FileNotFoundError(
                 "Running external application `{}` for a non-blnk file"
                 " failed{}:"
-                " {}".format(cmdjoin(parts), pathMsg, ex),
+                " {}".format(shlex.join(parts), pathMsg, ex),
             )
         except FileNotFoundError as ex:
             echo0(get_traceback())
             raise FileNotFoundError(
                 'The file was not found: '
-                ' {} ({})'.format(cmdjoin(parts), ex),
+                ' {} ({})'.format(shlex.join(parts), ex),
             )
         except Exception as ex:
             raise ex
