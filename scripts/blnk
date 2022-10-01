@@ -3,7 +3,7 @@ mkdir -p ~/.local/bin
 logsDir=~/.var/log/blnk
 mkdir -p "$logsDir"
 if [ -z "$Exec" ]; then
-    Exec=~/git/blnk/blnk.py
+    Exec=~/git/blnk/blnk/__init__.py
 fi
 echo "Output:" > $logsDir/out.log
 # echo "Errors:" > $logsDir/err.log
