@@ -39,6 +39,7 @@ associations = {
     ".csv": ["libreoffice", "--calc"],
     ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
              "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
+    # ".pdf": ["xdg-open"],  # xdg-open should be the default.
 }
 # ^ Each value can be a string or list.
 # ^ Besides associations there is also a special case necessary for
@@ -57,6 +58,15 @@ for argI in range(1, len(sys.argv)):
             verbosity = 2
         elif arg == "--verbose":
             verbosity = 1
+
+verbosities = [True, False, 0, 1, 2]
+
+def set_verbosity(level):
+    global verbosity
+    if level not in verbosities:
+        raise ValueError("level must be one of {}".format(verbosities))
+    verbosity = level
+    echo0("verbosity={}".format(verbosity))
 
 
 def which(program, more_paths=[]):
@@ -870,7 +880,7 @@ class BLink:
         # ^ Leave cwd as None since it should only be set by
         #   the 'Path' key of the shortcut.
         print("  - choosing app for \"{}\"".format(path))
-        app = "geany"
+        app = "xdg-open"  # "geany"
         # If you set blnk to handle unknown files:
         more_parts = []
         orig_app = app
@@ -1163,6 +1173,13 @@ def main(args):
             options["Terminal"] = "true"
         elif arg in ["--non-interactive", "-y"]:
             options["interactive"] = False
+        elif arg == "--verbose":
+            set_verbosity(1)
+        elif arg == "--debug":
+            set_verbosity(2)
+        elif arg.startswith("--"):
+            echo0('The argument "{}" is invalid.'.format(arg))
+            return 1
         else:
             if path is None:
                 path = arg
