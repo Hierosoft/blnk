@@ -5,6 +5,7 @@ mkdir -p "$logsDir"
 if [ -z "$Exec" ]; then
     Exec=~/git/blnk/blnk/__init__.py
 fi
+echo "logsDir=$logsDir"
 echo "Output:" > $logsDir/out.log
 # echo "Errors:" > $logsDir/err.log
 date >> $logsDir/out.log
