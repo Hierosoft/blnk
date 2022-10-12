@@ -39,7 +39,7 @@ associations = {
     ".csv": ["libreoffice", "--calc"],
     ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
              "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
-    # ".pdf": ["xdg-open"],  # xdg-open should be the default.
+    ".pdf": ["evince"],  # changed below (See preferred_pdf_viewers loop)
 }
 # ^ Each value can be a string or list.
 # ^ Besides associations there is also a special case necessary for
@@ -48,6 +48,9 @@ associations = {
 settings = {
     "file_type_associations": associations,
 }
+
+preferred_pdf_viewers = ["qpdfview", "atril", "evince"]
+# ^ evince is the GNOME and MATE "Document Viewer".
 
 verbosity = 0
 
@@ -92,6 +95,13 @@ def which(program, more_paths=[]):
 
     return None
 
+
+for try_pdf_viewer in preferred_pdf_viewers:
+    path = which(try_pdf_viewer)
+    if path is not None:
+        associations[".pdf"][0] = try_pdf_viewer
+        break
+del path
 
 def echo0(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -732,6 +742,13 @@ class BLink:
         #     os.chdir(cwd)
         # ^ Use the cwd param of run or check_call instead.
         print('* running "{}" (in "{}")...'.format(parts, os.getcwd()))
+        if parts[0] == "xdg-open":
+            raise ValueError(
+                'xdg-open was blocked to prevent an infinite loop'
+                ' in case the file type of {} is associated with blnk.'
+                ''.format(parts[1:])
+            )
+
         run_fn = subprocess.check_call
         use_check = False
         if hasattr(subprocess, 'run'):
@@ -814,7 +831,8 @@ class BLink:
         cwd -- Set this to the value of the 'Path' key if present to set
             the current working directory in the subprocess.
         '''
-        tryCmd = "xdg-open"
+        echo1('* _run("{}", "{}", cwd="")'.format(Exec, Type, cwd))
+        tryCmd = "geany"
         # TODO: try os.popen('open "{}"') on mac
         # NOTE: %USERPROFILE%, $HOME, ~, or such should already be
         #   replaced by getExec.
@@ -847,6 +865,12 @@ class BLink:
         try:
             thisOpenCmd = tryCmd
             print("  - thisOpenCmd={}...".format(thisOpenCmd))
+            if thisOpenCmd == "xdg-open":
+                raise ValueError(
+                    'xdg-open was blocked to prevent an infinite loop'
+                    ' in case the file type of {} is associated with blnk.'
+                    ''.format()
+                )
             return BLink._run_parts([thisOpenCmd, Exec], check=True)
         except OSError as ex:
             try:
@@ -880,7 +904,7 @@ class BLink:
         # ^ Leave cwd as None since it should only be set by
         #   the 'Path' key of the shortcut.
         print("  - choosing app for \"{}\"".format(path))
-        app = "xdg-open"  # "geany"
+        app = "geany"
         # If you set blnk to handle unknown files:
         more_parts = []
         orig_app = app
