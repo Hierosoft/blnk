@@ -39,7 +39,7 @@ associations = {
     ".csv": ["libreoffice", "--calc"],
     ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
              "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
-    ".pdf": ["evince"],  # changed below (See preferred_pdf_viewers loop)
+    ".pdf": ["xdg-open"],  # changed below (See preferred_pdf_viewers loop)
 }
 # ^ Each value can be a string or list.
 # ^ Besides associations there is also a special case necessary for
@@ -49,8 +49,9 @@ settings = {
     "file_type_associations": associations,
 }
 
-preferred_pdf_viewers = ["qpdfview", "atril", "evince"]
+# preferred_pdf_viewers = ["qpdfview", "atril", "evince"]
 # ^ evince is the GNOME and MATE "Document Viewer".
+preferred_pdf_viewers = []
 
 verbosity = 0
 
@@ -96,6 +97,7 @@ def which(program, more_paths=[]):
     return None
 
 
+path = None
 for try_pdf_viewer in preferred_pdf_viewers:
     path = which(try_pdf_viewer)
     if path is not None:
@@ -728,7 +730,7 @@ class BLink:
         return path, None
 
     @staticmethod
-    def _run_parts(parts, check=True, cwd=None):
+    def _run_parts(parts, check=True, cwd=None, target_blnk_type=False):
         '''
         Run a command (list of command and args) directly using the best
         call depending on the Python version.
@@ -737,17 +739,22 @@ class BLink:
         cwd -- Change to this working directory first. This
             should not usually be set to anything except the Path field
             of a .blnk (or .desktop) file.
+        is_blnk_type -- You can set this to True if the file type is
+            associated with blnk to prevent infinite recursion between
+            xdg-open and blnk.
         '''
         # if cwd is not None:
         #     os.chdir(cwd)
         # ^ Use the cwd param of run or check_call instead.
         print('* running "{}" (in "{}")...'.format(parts, os.getcwd()))
-        if parts[0] == "xdg-open":
+        if target_blnk_type and (parts[0] == "xdg-open"):
             raise ValueError(
-                'xdg-open was blocked to prevent an infinite loop'
+                'xdg-open was blocked to prevent infinite recursion'
                 ' in case the file type of {} is associated with blnk.'
                 ''.format(parts[1:])
             )
+        # else: There should be no infinite recursion if the document is
+        #   not a type associated with blnk such as plain text.
 
         run_fn = subprocess.check_call
         use_check = False
@@ -864,10 +871,14 @@ class BLink:
                 )
         try:
             thisOpenCmd = tryCmd
+            # FIXME: There should be a better way to solve this. The
+            #   infinite recursion only happens if the type of file
+            #   being opened (The file type of the path in the Exec
+            #   line) is associated with blnk.
             print("  - thisOpenCmd={}...".format(thisOpenCmd))
             if thisOpenCmd == "xdg-open":
                 raise ValueError(
-                    'xdg-open was blocked to prevent an infinite loop'
+                    'xdg-open was blocked to prevent infinite recursion'
                     ' in case the file type of {} is associated with blnk.'
                     ''.format()
                 )
