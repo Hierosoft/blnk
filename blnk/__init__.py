@@ -17,15 +17,21 @@ from datetime import (
 
 ENABLE_TK = False
 if sys.version_info.major >= 3:
-    import tkinter as tk
-    # from tkinter import ttk
-    from tkinter import messagebox
-    ENABLE_TK = True
+    try:
+        import tkinter as tk
+        # from tkinter import ttk
+        from tkinter import messagebox
+        ENABLE_TK = True
+    except ModuleNotFoundError:
+        pass
 else:
-    import Tkinter as tk
-    # import ttk
-    import tkMessageBox as messagebox
-    ENABLE_TK = True
+    try:
+        import Tkinter as tk
+        # import ttk
+        import tkMessageBox as messagebox
+        ENABLE_TK = True
+    except ModuleNotFoundError:
+        pass
 
 # Handle issues where the OS considers "BLNK" and all of these file
 #   extensions as "text/plain" rather than allowing them to be
