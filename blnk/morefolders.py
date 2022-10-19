@@ -269,6 +269,8 @@ def replace_vars(path):
         if old.startswith("%") and old.endswith("%"):
             path = path.replace(old, new)
         else:
+            if new is None:
+                raise ValueError("{} is None.".format(old))
             path = replace_isolated(path, old, new)
     return path
 
