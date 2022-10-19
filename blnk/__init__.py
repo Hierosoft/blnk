@@ -346,6 +346,7 @@ class BLink:
         profile,
     ]
     cloud_path = replace_vars("%CLOUD%")
+    # ^ Does return None if the entire string is one var that is blank.
     cloud_name = None
     echo0('cloud_path="{}"'.format(cloud_path))
     if cloud_path is not None:
