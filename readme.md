@@ -1,8 +1,16 @@
 # blnk
 https://github.com/poikilos/blnk
-In a "blink," your program appears on any OS regardless of home folders parent directory location.
 
-This is a Python rewrite of blnk-cs formerly called blnk (I didn't even look at the old code, only existing blnk files I had).
+In a "blink," your program, file, or URL appears, expanding environment variables or automatically re-writing absolute home paths if present on any OS.
+
+On any operating system, automate creating and following blnk shortcut
+files (similar to X .desktop files), expanding %% or $ environment
+variables (including %CLOUD% for ~/ownCloud or ~/Nextcloud if present)
+automatically.
+
+This is a from-scratch Python rewrite of blnk-cs (which was C# and
+formerly called blnk).
+
 
 ## Features
 - Automatically resolve cross-platform folder naming issues (such as if you are using a cloud app to sync files)! Cross-platform examples:
