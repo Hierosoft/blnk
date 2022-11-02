@@ -71,6 +71,7 @@ for argI in range(1, len(sys.argv)):
 
 verbosities = [True, False, 0, 1, 2]
 
+
 def set_verbosity(level):
     global verbosity
     if level not in verbosities:
@@ -110,6 +111,7 @@ for try_pdf_viewer in preferred_pdf_viewers:
         associations[".pdf"][0] = try_pdf_viewer
         break
 del path
+
 
 def echo0(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -330,6 +332,23 @@ from morefolders import (
     profiles,
     temporaryFiles,
 )
+
+
+def not_quoted(s, key=""):
+    '''
+    Keyword arguments:
+    key -- set the name of the variable (only for verbose messages).
+    '''
+    if s is None:
+        return None
+    for q in ['"', "'"]:
+        if (len(s) > 1) and s.startswith(q) and s.endswith(q):
+            return s[1:-1]
+            echo1("trimmed quotes from: {}={}".format(key, s))
+            break
+        else:
+            echo1("using already not quoted: {}={}".format(key, s))
+    return s
 
 
 def is_url(path):
@@ -616,13 +635,27 @@ class BLink:
         return section, v
 
     def get(self, key):
-        trySection = BLink.NO_SECTION
-        section, v = self.getBranch(trySection, key)
+        section = BLink.NO_SECTION
+        got_section, v = self.getBranch(section, key)
+        if got_section is None:
+            # It is using the latest format.
+            got_section, v = self.getBranch("[X-Blnk]", key)
+        old_v = v
+        v = not_quoted(v, key=key)
         return v
 
     def getExec(self, key='Exec'):
+        '''
+        Be careful when filling in paths from cwd here. This function
+        will keep the quotes to ensure paths with spaces work, and to
+        ensure the original syntax of the line is kept. To avoid issues:
+        - *always* use shlex.split on the output from this method.
+        '''
         trySection = BLink.NO_SECTION
         section, v = self.getBranch(trySection, key)
+        # Warning: don't remove quotes yet, because shlex.split
+        #   is done later! Removing the quotes now would split more
+        #   parts than should be.
 
         if v is None:
             path = self.path
@@ -785,10 +818,29 @@ class BLink:
         cwd -- Change to this working directory first. This
             should not usually be set to anything except the Path field
             of a .blnk (or .desktop) file.
+            - Warning: A value other than None will cause subprocess to
+              FileNotFoundError for some reason if running
+              `['xdg-open', DirectoryPath]`.
+
         is_blnk_type -- You can set this to True if the file type is
             associated with blnk to prevent infinite recursion between
             xdg-open and blnk.
+        check -- Set the "check" option of subprocess if available in
+            the version of Python that is running this module.
         '''
+        if cwd is not None:
+            if not_quoted(cwd) != cwd:
+                raise ValueError("cwd must not be quoted!")
+        for i in range(len(parts)):
+            if not_quoted(parts[i]) != parts[i]:
+                raise ValueError(
+                    "parts[{}] must not be quoted but is {}!"
+                    "".format(i, parts[i])
+                )
+        if (len(parts) > 1) and (parts[1] == cwd):
+            echo0('Warning: not using cwd="{}" since that is the target.'
+                  ''.format(cwd))
+            cwd = None
         # if cwd is not None:
         #     os.chdir(cwd)
         # ^ Use the cwd param of run or check_call instead.
@@ -803,12 +855,19 @@ class BLink:
         #   not a type associated with blnk such as plain text.
 
         run_fn = subprocess.check_call
+        run_fn_name = "subprocess.check_call"
         use_check = False
+        if len(parts) > 1:
+            if not os.path.exists(parts[1]):
+                echo1('Warning: "{}" does not exist.'.format(parts[1]))
+            else:
+                echo1('INFO: "{}" was found.'.format(parts[1]))
         if hasattr(subprocess, 'run'):
             # Python 3
             use_check = True
             run_fn = subprocess.run
-            print("  - using subprocess.run")
+            run_fn_name = "subprocess.run"
+            print("  - run_fn=subprocess.run")
             part0 = which(parts[0])
             # if localPath not in os.environ["PATH"].split(os.pathsep):
             if part0 is None:
@@ -824,23 +883,43 @@ class BLink:
                 part0 = which(parts[0], more_paths=[localBinPath])
                 if part0 is not None:
                     parts[0] = part0
+        completedprocess = None
+        returncode = None
         try:
+            echo1("run_fn={}".format(run_fn_name))
             if use_check:
+                echo1("* using check")
                 if cwd is not None:
-                    run_fn(parts, check=check, cwd=cwd)
+                    echo1("* manually-set cwd is None")
+                    # parts[0] = which(parts[0])
+                    echo1('parts[0]="{}"'.format(parts[0]))
+                    # Warning: If cwd is not None subprocess will raise
+                    #   FileNotFoundError if running
+                    #   ['xdg-open', DirectoryPath]!
+                    completedprocess = run_fn(parts, check=check, cwd=cwd)
                 else:
-                    run_fn(parts, check=check)
+                    echo1("* manually-set cwd is {}".format(cwd))
+                    completedprocess = run_fn(parts, check=check)
             else:
+                echo1("* not using check")
                 if cwd is not None:
-                    run_fn(parts, cwd=cwd)
+                    echo1("* manually-set cwd is None")
+                    completedprocess = run_fn(parts, cwd=cwd)
                 else:
-                    run_fn(parts)
+                    echo1("* manually-set cwd is {}".format(cwd))
+                    completedprocess = run_fn(parts)
+            if completedprocess is not None:
+                if hasattr(completedprocess, "returncode"):
+                    returncode = completedprocess.returncode
+            echo0("returncode={}".format(completedprocess.returncode))
         except FileNotFoundError as ex:
+            echo0("parts={}".format(parts))
             pathMsg = (" (The system path wasn't checked"
                        " since the executable part is a path)")
             if os.path.split(parts[0])[1] == parts[0]:
                 # It is a filename not a path.
-                pathMsg = (" ({} is not in the system path)"
+                pathMsg = (" ({} may not be in the system path,"
+                           " or maybe blnk set cwd and shouldn't have)"
                            "".format(parts[0]))
             raise FileNotFoundError(
                 "Running external application `{}` for a non-blnk file"
@@ -880,6 +959,10 @@ class BLink:
         Note that the "Path" key sets the working directory NOT the
         target, but the Exec argument is equivalent to 'Exec'.
 
+        Sequential arguments:
+        Exec -- Should be the Exec value if Type is Application, Path if
+            a File or Directory, or URL if a Link.
+
         Keyword arguments:
         cwd -- Set this to the value of the 'Path' key if present to set
             the current working directory in the subprocess.
@@ -889,17 +972,24 @@ class BLink:
         # TODO: try os.popen('open "{}"') on mac
         # NOTE: %USERPROFILE%, $HOME, ~, or such should already be
         #   replaced by getExec.
-        this_exists = os.path.isfile
+        exists_fn = os.path.isfile
         execParts = shlex.split(Exec)
         if len(execParts) > 1:
             Exec = execParts[0]
         if Type == "Directory":
-            this_exists = os.path.isdir
+            exists_fn = os.path.isdir
         elif Type == "Application":
-            echo0("* running application")
+            echo0('* running application {}'.format(execParts))
             return BLink._run_parts(execParts, check=True, cwd=cwd)
+        elif Type == "Link":
+            def true_fn():
+                echo0('* assuming "{}" exists.'.format(Exec))
+                return True
+            exists_fn = true_fn
+
         if platform.system() == "Windows":
             if (len(Exec) >= 2) and (Exec[1] == ":"):
+                # starts with "C:" or another drive letter
                 if not os.path.exists(Exec):
                     raise FileNotFoundError(
                         "The Exec target doesn't exist: {}"
@@ -908,31 +998,44 @@ class BLink:
             os.startfile(Exec, 'open')
             # run_fn('cmd /c start "{}"'.format(Exec))
             return 0
-        elif Type == "Directory":
-            echo0("* opening directory")
-            execParts = ['xdg-open', Exec]
+        if Type == "Directory":
+            echo0('* opening directory "{}"'.format(Exec))
+            execParts = ['xdg-open', not_quoted(Exec, key='_run() arg')]
             return BLink._run_parts(execParts, check=True, cwd=cwd)
         thisOpenCmd = None
         if "://" not in Exec:
-            if not this_exists(Exec):
+            if not exists_fn(Exec):
                 raise FileNotFoundError(
                     '"{}"'
                     ''.format(Exec)
                 )
-        try:
-            thisOpenCmd = tryCmd
-            # FIXME: There should be a better way to solve this. The
-            #   infinite recursion only happens if the type of file
-            #   being opened (The file type of the path in the Exec
-            #   line) is associated with blnk.
-            print("  - thisOpenCmd={}...".format(thisOpenCmd))
-            if thisOpenCmd == "xdg-open":
+        if Type == "Link":
+            thisOpenCmd = 'xdg-open'
+            '''
+            if len(parts) == 1:
                 raise ValueError(
-                    'xdg-open was blocked to prevent infinite recursion'
-                    ' in case the file type of {} is associated with blnk.'
-                    ''.format()
+                    "_run expected ['xdg-open', '{}'] (or some program"
+                    " for opening a URL) but only got {}"
+                    "".format(parts[1], parts)
                 )
+            '''
             return BLink._run_parts([thisOpenCmd, Exec], check=True)
+        try:
+            if Type == "File":
+                # thisOpenCmd = tryCmd
+                # FIXME: There should be a better way to solve this. The
+                #   infinite recursion only happens if the type of file
+                #   being opened (The file type of the path in the Exec
+                #   line) is associated with blnk.
+                echo0("  - thisOpenCmd={}...".format(thisOpenCmd))
+                if thisOpenCmd == "xdg-open":
+                    raise ValueError(
+                        'xdg-open was blocked to prevent infinite'
+                        ' recursion in case the file type of {} is'
+                        ' associated with blnk.'
+                        ''.format()
+                    )
+                return BLink._run_parts([thisOpenCmd, Exec], check=True)
         except OSError as ex:
             try:
                 echo0(str(ex))
@@ -1022,10 +1125,26 @@ class BLink:
                 )
 
     def run(self):
-        url, err = self.getExec(key="URL")
-        # ^ should make it absolute if relative
-        if url is not None:
-            return BLink._run(url, self.get("Type"))
+        '''
+        Run the BLink object.
+        '''
+
+        '''
+        section = None
+        section, Type = self.getBranch(BLink.NO_SECTION, 'Type')
+        if Type is None:
+            section = "[X-Blnk]"
+            section, Type = self.getBranch(section, 'Type')
+        echo1("[{}] Type={}".format(section, Type))
+        '''
+        Type = self.get('Type')  # ^ replaces all of the above
+        echo1("Type={}".format(Type))
+
+        if Type == "Link":
+            url = self.get('URL')
+            if url is None:
+                raise SyntaxError("if Type={} then URL should be set.".format(Type))
+            return BLink._run(url, Type)
         source_key = 'Exec'
         if self.get('Type') in ["Directory", "File"]:
             old_v = self.get('Exec')
@@ -1036,6 +1155,8 @@ class BLink:
                 source_key = 'Path'
 
         execStr, err = self.getExec(key=source_key)
+        # ^ Adds single quotes as necessary!
+        # ^ Makes the path absolute
         if err is not None:
             echo0(err)
         if execStr is None:
@@ -1043,15 +1164,21 @@ class BLink:
             return self._choose_app(self.path)
             # ^ Open the file itself since it is *not* in .blnk format.
         elif self.get("Type") == "File":
+            execStr = not_quoted(execStr, key=source_key)
             echo0("* Type=File so choosing app...")
             return self._choose_app(execStr)
         # else only Run the execStr itself if type is Application!
+        # - However, _run detects Type=Directory and handles that.
         # echo0("Trying _run...")
         cwd, PathErr = self.getExec(key='Path')
+        # ^ Resolves relative paths, but also adds quotes, so:
+        cwd = not_quoted(cwd)
         if PathErr is not None:
             echo0(PathErr)
-        return BLink._run(execStr, self.get("Type"),
-                          cwd=cwd)
+        else:
+            echo1("* there is no PathErr from getExec(key='cwd') in run.")
+            echo1('  - cwd="{}"'.format(cwd))
+        return BLink._run(execStr, self.get('Type'), cwd=cwd)
         # ^ _run should split parts (for relative, see getExec)
         # ^ Type is detected automatically.
 
