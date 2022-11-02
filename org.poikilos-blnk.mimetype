@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+  <mime-type type="application/blnk">
+    <comment>Blnk Shortcut File</comment>
+    <glob pattern="*.blnk"/>
+  </mime-type>
+</mime-info>
