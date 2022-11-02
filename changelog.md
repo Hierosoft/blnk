@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [git] - 2022-11-02
+### Changed
+- Change the required first line to "[X-Blnk]" to follow the Desktop
+  Entry Specification rule for extending the Desktop Entry
+  Specification (new features must be in a section starting with "X-").
+- Use "Path" if Type is "Directory" or "File"
+
+### Fixed
+- Fix the "Directory" implementation.
+
+### Removed
+- Deprecate "Encoding=UTF-8" line (deprecated by freedesktop.org
+  according to desktop-file-validate.
+
+
 ## [git] - 2022-03-31
 ### Changed
 - Change from the ':' to the '=' operator as per xdg desktop files (retain the "Content-Type: text/blnk" line).
