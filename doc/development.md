@@ -1,10 +1,16 @@
 # Development
 
-## Detecting the Mimetype
+## Mimetype
 The goal is to add a new mimetype, not reuse one that the OS may try to
 associate with other applications (on platforms that detect mimetype
 from characteristics other than the file extension--See
 "Why not use Desktop Entry").
+
+The mimetype is application/x-blnk, formerly text/blnk. See
+install-mimetype.sh and the `in_file=` line. The file that refers to is
+the mimetype definition in xdg-mime's format. For futher examples, see
+my other projects (under Poikilos on GitHub): b3view (fork),
+ForwardFileSync, and filehandoff.
 
 ### Why not use Desktop Entry
 Adding the `[Desktop Entry]` section makes kmimetypefinder detect the
@@ -33,7 +39,6 @@ Important differences in Blnk:
 - implements a new "[X-Target Metadata]" section to store the "created"
   and "modified" (or only "accessed" in the case of URLs) date(s) of
   the target file upon creating the shortcut.
-
 
 
 #### WIP

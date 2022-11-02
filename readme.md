@@ -26,7 +26,12 @@ formerly called blnk).
 - The `--non-interactive` (or `-y`) option ensures that no graphical dialog boxes are shown (They will also not be shown if there is no GUI session). If there is no interaction, the caller should show the error output (not standard output necessarily) and check the return of the program. The blnk shell script for GNU+Linux systems uses the option in that way and serves as an example.
 
 ## Install
-- Associate text files to blnk and it will try to edit the file if there is no Exec line (feature status: See `_choose_app` in blnk.py).
+- On GNU/Linux systems, run ./install-mimetype.sh
+  - The script will try to install the "application/x-blnk" mimetype.
+  - Manually associate the application/x-blnk file type with the blnk command wherever you have installed it (Try `which blnk` to find it if it is in your PATH).
+  - Otherwise, you would have to associate text/plain files to blnk and it will try to edit the file if there is no Exec line, or handle the file extension correctly (feature status: See `_choose_app` in blnk.py; It can't use xdg-open because if the target were plain text, then calling xdg-open would create infinite recursion of xdg-open to blnk then back).
+
+See also: "[Mimetype](doc/development.md#mimetype)" in doc/development.md.
 
 ### Install on Linux
 - Ensure you've installed `python3`
@@ -62,6 +67,7 @@ chmod +x ~/.local/bin/blnk
 ```
 cat ~/.var/log/blnk/*
 ```
+
 
 ## Troubleshooting
 Force automatic re-generation of icon on next run of blnk:

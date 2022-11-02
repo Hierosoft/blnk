@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [git] - 2022-11-02
 ### Changed
+- Change the mimetype to "application/x-blnk" (formerly "text/blnk" but never implemented as an XDG XML mimetype).
+
+## [git] - 2022-11-02
+### Changed
 - Change the required first line to "[X-Blnk]" to follow the Desktop
   Entry Specification rule for extending the Desktop Entry
   Specification (new features must be in a section starting with "X-").
