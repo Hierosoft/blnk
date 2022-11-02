@@ -109,13 +109,21 @@ You can test the outcome by running
   mimetype \$file
 where \$file is an existing filename ending in .blnk.
 
-* testing...
+* testing mimetype...
 END
 
-TEST_BLNK="blnk/tests/data/test.blnk"
+TEST_BLNK="tests/data/test.blnk"
 GOT_TYPE=`mimetype $TEST_BLNK | cut -d' ' -f2`
-if [ "x$EXPECTED_TYPE" != "x$GOT_TYPE" ]; then
-    echo "  Error: The expected type for $TEST_BLNK is $EXPECTED_TYPE but got $GOT_TYPE"
+if [ "x$GOT_TYPE" != "x$EXPECTED_TYPE" ]; then
+    echo "  Error: The command says \"$GOT_TYPE\" but the expected type for $TEST_BLNK is \"$EXPECTED_TYPE\"."
 else
-    echo "  GOT_TYPE=$GOT_TYPE for $TEST_BLNK (OK)"
+    echo "  Success ('mimetype $TEST_BLNK' says \"$GOT_TYPE\")"
+fi
+
+echo "* testing xdg-mime query filetype..."
+XDG_GOT_TYPE="`xdg-mime query filetype $TEST_BLNK`"
+if [ "x$XDG_GOT_TYPE" != "x$EXPECTED_TYPE" ]; then
+    echo "  Error: The command says \"$XDG_GOT_TYPE\" but the expected type for $TEST_BLNK is \"$EXPECTED_TYPE\"."
+else
+    echo "  Success ('mimetype $TEST_BLNK' says \"$GOT_TYPE\")"
 fi
