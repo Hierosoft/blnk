@@ -323,7 +323,9 @@ class FileTypeError(Exception):
     pass
 
 
-from morefolders import (
+from find_moreplatform import moreplatform
+
+from moreplatform import (  # formerly blnk.morefolders
     replace_isolated,
     replace_vars,
     localBinPath,
