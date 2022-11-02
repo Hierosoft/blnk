@@ -12,6 +12,7 @@ the mimetype definition in xdg-mime's format. For futher examples, see
 my other projects (under Poikilos on GitHub): b3view (fork),
 ForwardFileSync, and filehandoff.
 
+
 ### Why not use Desktop Entry
 Adding the `[Desktop Entry]` section makes kmimetypefinder detect the
 file as `application/x-desktop`, but that would prevent blnk from

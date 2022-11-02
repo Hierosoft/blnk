@@ -18,16 +18,17 @@ if [ ! -f "$in_file" ]; then
     exit 1
 fi
 
+EXPECTED_TYPE="`cat $in_file | grep mime-type | head -n1 | cut -d'=' -f2 | cut -d'"' -f2`"
+if [ "x$EXPECTED_TYPE" = "x" ]; then
+    # If not found, revert to the last known correct value.
+    EXPECTED_TYPE="application/x-blnk"
+fi
+
 if [ "x$1" = "x--help" ]; then
     >&2 echo
     >&2 echo $0
     >&2 echo "---------------------"
-    THIS_TYPE="`cat $in_file | grep mime-type | head -n1 | cut -d'=' -f2 | cut -d'"' -f2`"
-    if [ "x$THIS_TYPE" = "x" ]; then
-        # If not found, revert to the last known correct value.
-        THIS_TYPE="application/x-blnk"
-    fi
-    >&2 echo "This script installs the mimetype file \"$in_file\" for files ending in \".blnk\" so that you can register \"$THIS_TYPE\" (rather than \"text/plain\", which blnk tries to handle as a fallback) with blnk."
+    >&2 echo "This script installs the mimetype file \"$in_file\" for files ending in \".blnk\" so that you can register \"$EXPECTED_TYPE\" (rather than \"text/plain\", which blnk tries to handle as a fallback) with blnk."
     >&2 echo "Set PREFIX in the environment if desired. The default is /usr/local."
     >&2 echo "Set RUNAS_CMD in the environment if desired. The default is sudo. Set it to ' ' to prevent this and run as a non-root user."
     >&2 echo
@@ -108,4 +109,13 @@ You can test the outcome by running
   mimetype \$file
 where \$file is an existing filename ending in .blnk.
 
+* testing...
 END
+
+TEST_BLNK="blnk/tests/data/test.blnk"
+GOT_TYPE=`mimetype $TEST_BLNK | cut -d' ' -f2`
+if [ "x$EXPECTED_TYPE" != "x$GOT_TYPE" ]; then
+    echo "  Error: The expected type for $TEST_BLNK is $EXPECTED_TYPE but got $GOT_TYPE"
+else
+    echo "  GOT_TYPE=$GOT_TYPE for $TEST_BLNK (OK)"
+fi

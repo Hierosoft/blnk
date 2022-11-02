@@ -30,6 +30,8 @@ formerly called blnk).
   - The script will try to install the "application/x-blnk" mimetype.
   - Manually associate the application/x-blnk file type with the blnk command wherever you have installed it (Try `which blnk` to find it if it is in your PATH).
   - Otherwise, you would have to associate text/plain files to blnk and it will try to edit the file if there is no Exec line, or handle the file extension correctly (feature status: See `_choose_app` in blnk.py; It can't use xdg-open because if the target were plain text, then calling xdg-open would create infinite recursion of xdg-open to blnk then back).
+  - It may `mimetype $file` where `$file` is your file ending in .blnk still may fail. So:
+    - See <https://unix.stackexchange.com/questions/9856/why-does-xdg-mime-query-filetype-fail-to-find-a-new-added-file-type>
 
 See also: "[Mimetype](doc/development.md#mimetype)" in doc/development.md.
 
