@@ -323,15 +323,15 @@ class FileTypeError(Exception):
     pass
 
 
-from find_moreplatform import moreplatform
+from find_hierosoft import hierosoft
 
-from moreplatform import (  # formerly blnk.morefolders
+from hierosoft import (  # formerly blnk.morefolders
     replace_isolated,
     replace_vars,
     localBinPath,
-    profile,
-    shortcutsDir,
-    profiles,
+    HOME,
+    SHORTCUTS_DIR,
+    PROFILES,
     temporaryFiles,
 )
 
@@ -394,7 +394,7 @@ class BLink:
     '''
     NO_SECTION = "\n"
     BASES = [
-        profile,
+        HOME,
     ]
     cloud_path = replace_vars("%CLOUD%")
     # ^ Does return None if the entire string is one var that is blank.
@@ -404,7 +404,7 @@ class BLink:
         # myCloud = myCloudName
         # if myCloud is None:
         #     myCloud = "Nextcloud"
-        # os.path.join(profile, myCloud)
+        # os.path.join(HOME, myCloud)
         BASES.append(cloud_path)
         cloud_name = os.path.split(cloud_path)[1]
     echo0('cloud_name="{}"'.format(cloud_name))
@@ -688,7 +688,7 @@ class BLink:
 
         else:  # Not windows
             if path.startswith("~/"):
-                path = os.path.join(profile, path[2:])
+                path = os.path.join(HOME, path[2:])
 
             # Rewrite Windows paths **when on a non-Windows platform**:
             # print("  [blnk] v: \"{}\"".format(v))
@@ -736,16 +736,16 @@ class BLink:
                                 # ^ splat ('*') since join takes
                                 #   multiple params not a list.
                                 echo1("  [blnk] changing \"{}\" to"
-                                      " \"{}\"".format(old, profile))
-                                path = os.path.join(profile, rel)
+                                      " \"{}\"".format(old, HOME))
+                                path = os.path.join(HOME, rel)
                             else:
-                                path = profile
+                                path = HOME
                         else:
-                            path = profile
+                            path = HOME
                     elif path.lower() == "users":
-                        path = profiles
+                        path = PROFILES
                     else:
-                        path = os.path.join(profile, rest)
+                        path = os.path.join(HOME, rest)
                         echo0("  [blnk] {} was forced due to bad path:"
                               " \"{}\".".format(path, v))
                 else:
@@ -779,7 +779,7 @@ class BLink:
                         # doesn't exist, but use the home directory
                         # so it is a path that makes some sort of sense
                         # to everyone even if they don't have the
-                        path = os.path.join(profile, rest)
+                        path = os.path.join(HOME, rest)
                         echo0("  [blnk] {} was forced due to bad path:"
                               " \"{}\".".format(path, v))
             else:
@@ -954,7 +954,8 @@ class BLink:
     @staticmethod
     def _run(Exec, Type, cwd=None):
         '''
-        This is a static method, so any object members must be sent.
+        This is a static method, so any object attributes must be
+        provided as arguments.
 
         Run the correct path automatically using the Type variable from
         the blnk file (Type can be Directory, File, OR Application).
@@ -1213,8 +1214,8 @@ def create_icon():
     print("* checking for \"{}\"".format(dtPath))
     if not os.path.isfile(dtPath):
         print("* writing \"{}\"...".format(dtPath))
-        if not os.path.isdir(shortcutsDir):
-            os.makedirs(shortcutsDir)
+        if not os.path.isdir(SHORTCUTS_DIR):
+            os.makedirs(SHORTCUTS_DIR)
         with open(dtPath, 'w') as outs:
             for line in dtLines:
                 outs.write(line + "\n")
