@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 # See __doc__ further down for documentation.
 
@@ -7,7 +7,6 @@ import sys
 import os
 import platform
 import subprocess
-import traceback
 import pathlib
 import shlex
 from datetime import (
@@ -59,50 +58,15 @@ settings = {
 # ^ evince is the GNOME and MATE "Document Viewer".
 preferred_pdf_viewers = []
 
-verbosity = 0
+from find_hierosoft import hierosoft
 
-for argI in range(1, len(sys.argv)):
-    arg = sys.argv[argI]
-    if arg.startswith("--"):
-        if arg == "--debug":
-            verbosity = 2
-        elif arg == "--verbose":
-            verbosity = 1
-
-verbosities = [True, False, 0, 1, 2]
-
-
-def set_verbosity(level):
-    global verbosity
-    if level not in verbosities:
-        raise ValueError("level must be one of {}".format(verbosities))
-    verbosity = level
-    echo0("verbosity={}".format(verbosity))
-
-
-def which(program, more_paths=[]):
-    # Jay, & Mar77i. (2017, November 10). Path-Test if executable exists in
-    #     Python? [Answer]. Stack Overflow.
-    #     https://stackoverflow.com/questions/377017/
-    #     test-if-executable-exists-in-python
-    import os
-
-    def is_exe(fpath):
-        # The fpath param name DIFFERS since it is an inline function.
-        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
-
-    fpath = os.path.split(program)[0]
-    if fpath:
-        if is_exe(program):
-            return program
-    else:
-        for path in (os.environ["PATH"].split(os.pathsep) + more_paths):
-            exe_file = os.path.join(path, program)
-            if is_exe(exe_file):
-                return exe_file
-
-    return None
-
+from hierosoft import (
+    echo0,
+    echo1,
+    echo2,
+    set_verbosity,
+    which,
+)
 
 path = None
 for try_pdf_viewer in preferred_pdf_viewers:
@@ -113,95 +77,25 @@ for try_pdf_viewer in preferred_pdf_viewers:
 del path
 
 
-def echo0(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
 
+from hierosoft import (  # formerly blnk.morefolders
+    replace_isolated,
+    replace_vars,
+    localBinPath,
+    HOME,
+    SHORTCUTS_DIR,
+    PROFILES,
+    temporaryFiles,
+)
 
-def echo1(*args, **kwargs):
-    if verbosity < 1:
-        return False
-    print(*args, file=sys.stderr, **kwargs)
-    return True
-
-
-def echo2(*args, **kwargs):
-    if verbosity < 2:
-        return False
-    print(*args, file=sys.stderr, **kwargs)
-    return True
-
-
-# region same as pycodetool
-# syntax_error_fmt = "{path}:{row}:{column}: {message}"
-syntax_error_fmt = 'File "{path}", line {row}, {column} {message}'
-# ^ such as (Python-style, so readable by Geany):
-'''
-  File "/redacted/git/pycodetool/pycodetool/spec.py", line 336, in read_spec
-'''
-
-
-def set_syntax_error_fmt(fmt):
-    global syntax_error_fmt
-    syntax_error_fmt = fmt
-
-
-def to_syntax_error(path, lineN, msg, col=None):
-    '''
-    Convert the error to a syntax error that specifies the file and line
-    number that has the bad syntax.
-
-    Keyword arguments:
-    col -- is the character index relative to the start of the line,
-        starting at 1 for compatibility with outputinspector (which will
-        subtract 1 if using editors that start at 0).
-    '''
-    this_fmt = syntax_error_fmt
-
-    if col is None:
-        part = "{column}"
-        removeI = this_fmt.find(part)
-        if removeI > -1:
-            suffixI = removeI + len(part) + 1
-            # ^ +1 to get punctuation!
-            this_fmt = this_fmt[:removeI] + this_fmt[suffixI:]
-    if lineN is None:
-        part = "{row}"
-        removeI = this_fmt.find(part)
-        if removeI > -1:
-            suffixI = removeI + len(part) + 1
-            # ^ +1 to get punctuation!
-            this_fmt = this_fmt[:removeI] + this_fmt[suffixI:]
-    return this_fmt.format(path=path, row=lineN, column=col, message=msg)
-    # ^ Settings values not in this_fmt is ok.
-
-
-def echo_SyntaxWarning(path, lineN, msg, col=None):
-    msg = to_syntax_error(path, lineN, msg, col=col)
-    echo0(msg)
-    # ^ So the IDE can try to parse what path&line has an error.
-
-
-def raise_SyntaxError(path, lineN, msg, col=None):
-    echo_SyntaxWarning(path, lineN, msg, col=col)
-    raise SyntaxError(msg)
-
-# endregion same as pycodetool
-
-
-def get_traceback(indent=""):
-    ex_type, ex, tb = sys.exc_info()
-    msg = "{}{} {}:\n".format(indent, ex_type, ex)
-    msg += traceback.format_exc()
-    del tb
-    return msg
-
-
-def view_traceback(indent=""):
-    ex_type, ex, tb = sys.exc_info()
-    print("{}{} {}: ".format(indent, ex_type, ex), file=sys.stderr)
-    traceback.print_tb(tb)
-    del tb
-    print("", file=sys.stderr)
+from hierosoft.logging import (
+    set_syntax_error_fmt,
+    to_syntax_error,
+    echo_SyntaxWarning,
+    raise_SyntaxError,
+    get_traceback,
+    view_traceback,
+)
 
 
 '''
@@ -323,17 +217,6 @@ class FileTypeError(Exception):
     pass
 
 
-from find_hierosoft import hierosoft
-
-from hierosoft import (  # formerly blnk.morefolders
-    replace_isolated,
-    replace_vars,
-    localBinPath,
-    HOME,
-    SHORTCUTS_DIR,
-    PROFILES,
-    temporaryFiles,
-)
 
 
 def not_quoted(s, key=""):
