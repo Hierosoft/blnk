@@ -89,14 +89,14 @@ MIMEAPPS_LIST=~/.config/mimeapps.list
 >&2 printf "Adding $MIMETYPE=$SC_NAME to $MIMEAPPS_LIST..."
 if [ ! -f $MIMEAPPS_LIST ]; then
     mkdir -p $PREFIX/share/applications
-    echo "$MIMETYPE=$SC_NAME" > $MIMEAPPS_LIST
+    echo "[Added Associations]" > $MIMEAPPS_LIST
+    echo "$MIMETYPE=$SC_NAME" >> $MIMEAPPS_LIST
     if [ $? -ne 0 ]; then
         >&2 echo "FAILED"
         exit 1
     else
         >&2 echo "OK"
     fi
-
 else
     if grep -Fxq "$MIMETYPE=$SC_NAME" $MIMEAPPS_LIST
     then
@@ -111,6 +111,9 @@ else
         >&2 echo "OK"
     fi
 fi
+# FIXME: Whether the section matters is unclear. The new line may
+#   end up in "[Added Associations]" or [Default Applications]"
+#   ("[Default Applications]" worked).
 
 # /dev/null since it doesn't seem to be necessary anymore (After switching to ~/.config/mimeapps.list above).
 cat >/dev/null <<END
