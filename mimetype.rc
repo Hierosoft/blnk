@@ -1,0 +1,25 @@
+if [ "x$PREFIX" = "x" ]; then
+    PREFIX="/usr/local"
+fi
+if [ "x$THIS_XDG_APP_ID" = "x" ]; then
+    THIS_XDG_APP_ID="org.poikilos-blnk"
+fi
+in_file="$THIS_XDG_APP_ID.xml"
+echo "mimetypes PREFIX=$PREFIX"
+
+expected_db="/usr/share/mime"
+unexpected_db="$PREFIX/share/mime"
+# ^ previously these two values were switched, but on Linux Mint 21,
+#   'sudo xdg-mime install --mode system $in_file' uses the /usr prefix
+#   not /usr/local.
+
+unexpected_dest="$unexpected_db/packages/$in_file"
+expected_dest="$expected_db/packages/$in_file"
+DONE_DEST=
+if [ -f "$unexpected_dest" ]; then
+    DONE_DEST="$unexpected_dest"
+elif [ -f "$expected_dest" ]; then
+    DONE_DEST="$expected_dest"
+else
+    echo "There is no $unexpected_dest nor $expected_dest"
+fi

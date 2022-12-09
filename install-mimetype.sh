@@ -5,10 +5,27 @@
 $0
 ---------------------
 END
+NOEXIT=false
 
-if [ "x$PREFIX" = "x" ]; then
-    PREFIX="/usr/local"
+if [ "x$1" = "x--no-exit" ]; then
+    NOEXIT=true
 fi
+
+
+exit_if(){
+    # This is useless since it doesn't stop the script itself.
+    code=$1
+    if [ "x$code" = "x" ]; then
+        code=1
+    fi
+    if [ "x$NOEXIT" = "xfalse" ]; then
+        exit $code
+    else
+        return $code
+    fi
+}
+
+. ./mimetype.rc
 if [ "x$RUNAS_CMD" = "x" ]; then
     RUNAS_CMD="sudo"
 fi
@@ -19,8 +36,9 @@ if [ ! -f "`command -v $RUNAS_CMD`" ]; then
     echo "* $RUNAS_CMD doesn't exist, so it will not be used."
     RUNAS_CMD=""
 fi
-in_file="org.poikilos-blnk.xml"
+
 if [ ! -f "$in_file" ]; then
+    # defined by mimetype.rc
     >&2 echo "Error: '$in_file' is missing. This script must run from the cloned blnk repo."
     exit 1
 fi
@@ -41,22 +59,25 @@ END
     exit 0
 fi
 
-unexpected_db="/usr/share/mime"
-expected_db="$PREFIX/share/mime"
-unexpected_dest="$unexpected_db/packages/$in_file"
-expected_dest="$expected_db/packages/$in_file"
+. ./mimetype.rc
+if [ $? -ne 0 ]; then exit 1; fi
+
 if [ -f "$unexpected_dest" ]; then
     >&2 echo "Error: 'There is already a packaged version of $in_file at $unexpected_dest, so nothing will be done. If you are sure the package is removed, delete the file and this script will attempt to install it at the unpackaged location $expected_dest."
     exit 2
 fi
 
+echo "[$0] expected_db=$expected_db"
+echo "[$0] unexpected_db=$unexpected_db"
 if [ -f "$expected_dest" ]; then
+    DONE_DEST="$expected_dest"
     >&2 echo "* trying to update existing $expected_dest..."
     >&2 echo "  uninstalling..."
     $RUNAS_CMD xdg-mime uninstall --mode system $expected_dest
     code=$?
     if [ $code -eq 0 ]; then
         >&2 echo "  Success"
+        DONE_DEST="$expected_dest"
     else
         >&2 echo "  Error: '$RUNAS_CMD xdg-mime uninstall --mode system $expected_dest' failed with error code $code."
         exit $code
