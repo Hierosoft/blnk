@@ -53,7 +53,7 @@ cat > "$SC_FILE" <<END
 [Desktop Entry]
 Exec=$BIN_FILE
 MimeType=$MIMETYPE;
-NoDisplay=false
+NoDisplay=true
 Name=$DISPLAY_NAME
 Type=Application
 END
@@ -63,6 +63,9 @@ if [ $? -ne 0 ]; then
 else
     >&2 echo "OK"
 fi
+# ^ NoDisplay=false still didn't make it appear in "Open With". See
+#   issue #6. Automating the file type association (see uses of
+#   MIMEAPPS_LIST below) was the only solution that worked.
 
 ./install-mimetype.sh
 
