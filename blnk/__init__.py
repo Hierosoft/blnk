@@ -68,16 +68,6 @@ from hierosoft import (
     which,
 )
 
-path = None
-for try_pdf_viewer in preferred_pdf_viewers:
-    path = which(try_pdf_viewer)
-    if path is not None:
-        associations[".pdf"][0] = try_pdf_viewer
-        break
-del path
-
-
-
 from hierosoft import (  # formerly blnk.morefolders
     replace_isolated,
     replace_vars,
@@ -97,6 +87,13 @@ from hierosoft.logging import (
     view_traceback,
 )
 
+path = None
+for try_pdf_viewer in preferred_pdf_viewers:
+    path = which(try_pdf_viewer)
+    if path is not None:
+        associations[".pdf"][0] = try_pdf_viewer
+        break
+del path
 
 '''
 ### XDG specification issue
@@ -106,6 +103,9 @@ the XDG mailing list about it to report the issue (2022-11-02 from gmail
 and it came back through the system indicating it was sent to list
 members). I mentioned that blnk implements the suggested additions to
 the specification.
+
+Later I posted:
+- <https://gitlab.freedesktop.org/xdg/xdg-utils/-/issues/210>
 
 See also: "[Why not use Desktop
 Entry](doc/development.md#Why not use Desktop Entry)" in
@@ -215,8 +215,6 @@ symbols.
 
 class FileTypeError(Exception):
     pass
-
-
 
 
 def not_quoted(s, key=""):
@@ -1029,7 +1027,9 @@ class BLink:
         if Type == "Link":
             url = self.get('URL')
             if url is None:
-                raise SyntaxError("if Type={} then URL should be set.".format(Type))
+                raise SyntaxError(
+                    "if Type={} then URL should be set.".format(Type)
+                )
             return BLink._run(url, Type)
         source_key = 'Exec'
         if self.get('Type') in ["Directory", "File"]:
@@ -1173,7 +1173,8 @@ def create_shortcut_file(target, options, target_key='Exec'):
                          "".format(target_key, valid_target_keys))
     if options.get('Name') is None:
         if target_key == "URL":
-            raise ValueError("You must provide a 'Name' option for a URL.")
+            # May be automatically set by cli. See uses of name_from_url.
+            raise ValueError("You must provide a 'Name' option for this URL.")
         if target.endswith(os.path.sep):
             target = target[:-len(os.path.sep)]
         # echo1('Using target: "{}"'.format(target))
@@ -1280,6 +1281,28 @@ def create_shortcut_file(target, options, target_key='Exec'):
     return 0
 
 
+def name_from_url(url):
+    # Same logic is in hierosoft
+    if sys.version_info.major >= 3:
+        from urllib.parse import urlparse
+    else:
+        from urlparse import urlparse, parse_qs
+    # parts = url.split('/')
+    parseresult = urlparse(url)
+    # ^ gets ParseResult(scheme='http', netloc='example.com',
+    #   path='/random/folder/path.html', params='', query='', fragment='')
+    parts = parseresult.path.split("/")
+    if parts[-1].lower().startswith('index.'):
+        parts = parts[-1]
+    if len(parts) > 2:
+        # such as ['Poikilos', 'EnlivenMinetest', 'issues', '431']
+        # (from https://github.com/Poikilos/EnlivenMinetest/issues/431)
+        if parts[-2] == "issues":
+            return "{} issue {}".format(parts[-3], parts[-1])
+            # ^ such as "EnlivenMinetest issue 431"
+    return None
+
+
 def main(args):
     # create_icon()
     if len(args) < 2:
@@ -1334,6 +1357,8 @@ def main(args):
     elif is_url(path):
         options["Type"] = "Link"
         target_key = "URL"
+        if options.get('Name') is None:
+            options['Name'] = name_from_url(path)
         if options.get('Name') is None:
             echo1("got: {}".format(sys.argv))
             amp_msg = ('If the URL has an ampersand, quote the URL\n'
