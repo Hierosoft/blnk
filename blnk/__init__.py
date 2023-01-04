@@ -14,13 +14,14 @@ from datetime import (
     timezone,
 )
 
-ENABLE_TK = False
 if sys.version_info.major >= 3:
     try:
         import tkinter as tk
         # from tkinter import ttk
         from tkinter import messagebox
-        ENABLE_TK = True
+        # ENABLE_TK = True
+        # ^ Check for it with `if 'tk' in globals():` instead.
+        # - only tkinter is in sys.modules--`as` doesn't change that.
     except ModuleNotFoundError:
         pass
 else:
@@ -28,35 +29,9 @@ else:
         import Tkinter as tk
         # import ttk
         import tkMessageBox as messagebox
-        ENABLE_TK = True
     except ModuleNotFoundError:
         pass
 
-# Handle issues where the OS considers "BLNK" and all of these file
-#   extensions as "text/plain" rather than allowing them to be
-#   associated with separate programs.
-associations = {
-    ".kdb": ["keepassxc"],
-    ".kdbx": ["keepassxc"],
-    ".pyw": ["python"],
-    ".py": ["python"],
-    ".nja": ["ninja-ide", "-p"],  # required for opening project files
-    ".csv": ["libreoffice", "--calc"],
-    ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
-             "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
-    ".pdf": ["xdg-open"],  # changed below (See preferred_pdf_viewers loop)
-}
-# ^ Each value can be a string or list.
-# ^ Besides associations there is also a special case necessary for
-#   ninja-ide to change the file to the containing folder (See
-#   associations code further down).
-settings = {
-    "file_type_associations": associations,
-}
-
-# preferred_pdf_viewers = ["qpdfview", "atril", "evince"]
-# ^ evince is the GNOME and MATE "Document Viewer".
-preferred_pdf_viewers = []
 
 from find_hierosoft import hierosoft
 
@@ -86,6 +61,33 @@ from hierosoft.logging import (
     get_traceback,
     view_traceback,
 )
+
+
+# Handle issues where the OS considers "BLNK" and all of these file
+#   extensions as "text/plain" rather than allowing them to be
+#   associated with separate programs.
+associations = {
+    ".kdb": ["keepassxc"],
+    ".kdbx": ["keepassxc"],
+    ".pyw": ["python"],
+    ".py": ["python"],
+    ".nja": ["ninja-ide", "-p"],  # required for opening project files
+    ".csv": ["libreoffice", "--calc"],
+    ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
+             "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
+    ".pdf": ["xdg-open"],  # changed below (See preferred_pdf_viewers loop)
+}
+# ^ Each value can be a string or list.
+# ^ Besides associations there is also a special case necessary for
+#   ninja-ide to change the file to the containing folder (See
+#   associations code further down).
+settings = {
+    "file_type_associations": associations,
+}
+
+# preferred_pdf_viewers = ["qpdfview", "atril", "evince"]
+# ^ evince is the GNOME and MATE "Document Viewer".
+preferred_pdf_viewers = []
 
 path = None
 for try_pdf_viewer in preferred_pdf_viewers:
