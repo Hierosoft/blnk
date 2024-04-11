@@ -47,7 +47,7 @@ from hierosoft import (  # formerly blnk.morefolders
     replace_isolated,
     replace_vars,
     localBinPath,
-    HOME,
+    sysdirs,
     SHORTCUTS_DIR,
     PROFILES,
     temporaryFiles,
@@ -62,7 +62,6 @@ from hierosoft.morelogging import (
     view_traceback,
 )
 
-
 # Handle issues where the OS considers "BLNK" and all of these file
 #   extensions as "text/plain" rather than allowing them to be
 #   associated with separate programs.
@@ -73,10 +72,19 @@ associations = {
     ".py": ["python"],
     ".nja": ["ninja-ide", "-p"],  # required for opening project files
     ".csv": ["libreoffice", "--calc"],
-    ".csv": ["/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
-             "--command=libreoffice", "org.libreoffice.LibreOffice", "--calc"],
     ".pdf": ["xdg-open"],  # changed below (See preferred_pdf_viewers loop)
 }
+if platform.system() == "Windows":
+    if which("py") is not None:
+        associations['.py'] = ["py", "-3"]
+        associations['.pyw'] = ["py", "-3"]
+else:
+    if which("libreoffice") is None:
+        if which("flatpak") is not None:
+            associations[".csv"] = ["flatpak", "run", "--branch=stable",
+                                    "--arch=x86_64", "--command=libreoffice",
+                                    "org.libreoffice.LibreOffice", "--calc"]
+
 # ^ Each value can be a string or list.
 # ^ Besides associations there is also a special case necessary for
 #   ninja-ide to change the file to the containing folder (See
@@ -291,7 +299,7 @@ class BLink:
     '''
     NO_SECTION = "\n"
     BASES = [
-        HOME,
+        sysdirs['HOME'],
     ]
     cloud_path = replace_vars("%CLOUD%")
     # ^ Does return None if the entire string is one var that is blank.
@@ -301,7 +309,7 @@ class BLink:
         # myCloud = myCloudName
         # if myCloud is None:
         #     myCloud = "Nextcloud"
-        # os.path.join(HOME, myCloud)
+        # os.path.join(sysdirs['HOME'], myCloud)
         BASES.append(cloud_path)
         cloud_name = os.path.split(cloud_path)[1]
     echo0('cloud_name="{}"'.format(cloud_name))
@@ -544,17 +552,26 @@ class BLink:
         return v
 
     def getExec(self, key='Exec'):
-        '''
+        '''Get Exec (or another key) from the blnk file.
+
         Be careful when filling in paths from cwd here. This function
         will keep the quotes to ensure paths with spaces work, and to
-        ensure the original syntax of the line is kept. To avoid issues:
-        - *always* use shlex.split on the output from this method.
+        ensure the original syntax of the line is kept.
+
+        Args:
+            key (str, optional): Key desired. Defaults to "Exec".
+
+        Returns:
+            str: value of Exec or other specified key. *Always* use
+                shlex.split on the return (if not None).
         '''
+        prefix = "[getExec] "
         trySection = BLink.NO_SECTION
         section, v = self.getBranch(trySection, key)
         # Warning: don't remove quotes yet, because shlex.split
         #   is done later! Removing the quotes now would split more
         #   parts than should be.
+        echo0(prefix+"got v={}".format(v))
 
         if v is None:
             path = self.path
@@ -585,7 +602,7 @@ class BLink:
 
         else:  # Not windows
             if path.startswith("~/"):
-                path = os.path.join(HOME, path[2:])
+                path = os.path.join(sysdirs['HOME'], path[2:])
 
             # Rewrite Windows paths **when on a non-Windows platform**:
             # print("  [blnk] v: \"{}\"".format(v))
@@ -633,16 +650,16 @@ class BLink:
                                 # ^ splat ('*') since join takes
                                 #   multiple params not a list.
                                 echo1("  [blnk] changing \"{}\" to"
-                                      " \"{}\"".format(old, HOME))
-                                path = os.path.join(HOME, rel)
+                                      " \"{}\"".format(old, sysdirs['HOME']))
+                                path = os.path.join(sysdirs['HOME'], rel)
                             else:
-                                path = HOME
+                                path = sysdirs['HOME']
                         else:
-                            path = HOME
+                            path = sysdirs['HOME']
                     elif path.lower() == "users":
                         path = PROFILES
                     else:
-                        path = os.path.join(HOME, rest)
+                        path = os.path.join(sysdirs['HOME'], rest)
                         echo0("  [blnk] {} was forced due to bad path:"
                               " \"{}\".".format(path, v))
                 else:
@@ -676,34 +693,47 @@ class BLink:
                         # doesn't exist, but use the home directory
                         # so it is a path that makes some sort of sense
                         # to everyone even if they don't have the
-                        path = os.path.join(HOME, rest)
+                        path = os.path.join(sysdirs['HOME'], rest)
                         echo0("  [blnk] {} was forced due to bad path:"
                               " \"{}\".".format(path, v))
             else:
                 path = v.replace("\\", "/")
 
         path = replace_vars(path)
+
         if BLink.cloud_name is not None:
             for statedCloud in ["ownCloud", "owncloud"]:
                 path = replace_isolated(path, statedCloud,
                                         BLink.cloud_name,
                                         case_sensitive=False)
 
-        old_parts = shlex.split(path)
+        echo0(prefix+"got path={}".format(path))
+        if platform.system() == "Windows":
+            # old_parts = shlex.split(path)
+            # ^ removes backslashes \ !!
+            #   https://github.com/mesonbuild/meson/issues/5726
+            old_parts = shlex.split(shlex.quote(path))
+            for i in range(len(old_parts)):
+                old_parts[i] = old_parts[i].replace("\\\\", "\\")
+        else:
+            old_parts = shlex.split(path)
+
+        echo0(prefix+"got old_parts={}".format(old_parts))
+
         # if not os.path.exists(old_parts[0]):
         abs0 = self.getAbs(old_parts[0])
         if old_parts[0] == abs0:
             if not os.path.exists(old_parts[0]):
-                print('  [blnk] "{}"'
-                      ' wasn\'t an existing absolute or relative path"'
-                      ''.format(old_parts[0]))
+                print("  [blnk] \"{}\""
+                      " wasn't an existing absolute or relative path"
+                      .format(old_parts[0]))
         old_parts[0] = abs0
         path = shlex.join(old_parts)
         # else:
         #    print('* using existing relative target "{}"'.format(old_parts))
 
         if path != v:
-            print("  [blnk] changing \"{}\" to"
+            print("  [blnk] changed \"{}\" to"
                   " \"{}\"".format(v, path))
         return path, None
 
@@ -846,7 +876,10 @@ class BLink:
             else:
                 raise ex
         '''
-        return 0
+        if returncode is None:
+            returncode = 1
+        # else should have been set to completedprocess.returncode
+        return returncode
 
     @staticmethod
     def _run(Exec, Type, cwd=None):
@@ -867,8 +900,8 @@ class BLink:
         cwd -- Set this to the value of the 'Path' key if present to set
             the current working directory in the subprocess.
         '''
-        echo1('* _run("{}", "{}", cwd="")'.format(Exec, Type, cwd))
-        tryCmd = "geany"
+        echo1('* _run("{}", "{}", cwd="{}")'.format(Exec, Type, cwd))
+        tryCmd = "geany"  # See `app` variable instead.
         # TODO: try os.popen('open "{}"') on mac
         # NOTE: %USERPROFILE%, $HOME, ~, or such should already be
         #   replaced by getExec.
@@ -930,10 +963,10 @@ class BLink:
                 echo0("  - thisOpenCmd={}...".format(thisOpenCmd))
                 if thisOpenCmd == "xdg-open":
                     raise ValueError(
-                        'xdg-open was blocked to prevent infinite'
+                        '{} was blocked to prevent infinite'
                         ' recursion in case the file type of {} is'
                         ' associated with blnk.'
-                        ''.format()
+                        ''.format(thisOpenCmd, Exec)
                     )
                 return BLink._run_parts([thisOpenCmd, Exec], check=True)
         except OSError as ex:
@@ -962,6 +995,7 @@ class BLink:
         Application).
         '''
         global settings
+        prefix = "_choose_app"
         cwd = None
         # cwd = os.path.dirname(os.path.realpath(self.path))
         # print('  - set cwd="{}"'.format(cwd))
@@ -987,6 +1021,8 @@ class BLink:
                 else:
                     more_missing.append(app)
                 # else keep looking for other options
+                if which(app) is not None:
+                    app = which(app)  # in case not in path
                 cmd_parts = [app] + more_parts + [path]
 
         # shlex.split is NOT necessary since _choose_app should
@@ -1000,6 +1036,7 @@ class BLink:
             cmd_parts =
         '''
         if which(app) is None:
+            echo0(prefix+"{} is not in the system PATH.".format(app))
             dotExt = os.path.splitext(path)[1]
             missing_msg = ""
             if len(more_missing) > 0:
@@ -1008,6 +1045,8 @@ class BLink:
                   ''.format(app, missing_msg, orig_app, dotExt))
             app = orig_app
             more_parts = []
+        else:
+            app = which(app)
         if path.lower().endswith(".nja"):
             path = os.path.split(path)[0]
             # ^ With the -p option, Ninja-IDE will only open a directory
@@ -1305,7 +1344,8 @@ def name_from_url(url):
     if sys.version_info.major >= 3:
         from urllib.parse import urlparse
     else:
-        from urlparse import urlparse, parse_qs
+        from urlparse import urlparse
+        # , parse_qs
     # parts = url.split('/')
     parseresult = urlparse(url)
     # ^ gets ParseResult(scheme='http', netloc='example.com',
@@ -1382,7 +1422,8 @@ def main(args):
             echo1("got: {}".format(sys.argv))
             amp_msg = ('If the URL has an ampersand, quote the URL\n'
                        ' to prevent the URL from cutting off such as\n'
-                       ' if that is not the complete URL you entered.'
+                       ' if that is not the complete URL you entered'
+                       ' (path={}).'
                        ''.format(path))
             showMsgBoxOrErr(
                 ('Error: Please provide a name for the shortcut'
