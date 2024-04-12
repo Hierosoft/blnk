@@ -243,18 +243,23 @@ def clean_shlex_join(parts):
 
 def not_quoted(s, key=""):
     '''
-    Keyword arguments:
-    key -- set the name of the variable (only for verbose messages).
+    Args:
+        key (str): The name of the variable (only used
+            for tracing).
     '''
+    # a.k.a. no_enclosures
+    key_msg = ""
+    if key:
+        key_msg = "{}=".format(key)
     if s is None:
         return None
     for q in ['"', "'"]:
         if (len(s) > 1) and s.startswith(q) and s.endswith(q):
-            return s[1:-1]
-            echo1("trimmed quotes from: {}={}".format(key, s))
+            echo0("trimmed quotes from: {}{}".format(key_msg, s))
+            return s[1:-1].replace("\\"+q, q)
             break
         else:
-            echo1("using already not quoted: {}={}".format(key, s))
+            echo0("using already not quoted: {}".format(key_msg, s))
     return s
 
 
@@ -304,7 +309,7 @@ class BLink:
     cloud_path = replace_vars("%CLOUD%")
     # ^ Does return None if the entire string is one var that is blank.
     cloud_name = None
-    echo0('cloud_path="{}"'.format(cloud_path))
+    print('cloud_path="{}"'.format(cloud_path))
     if cloud_path is not None:
         # myCloud = myCloudName
         # if myCloud is None:
@@ -312,7 +317,7 @@ class BLink:
         # os.path.join(sysdirs['HOME'], myCloud)
         BASES.append(cloud_path)
         cloud_name = os.path.split(cloud_path)[1]
-    echo0('cloud_name="{}"'.format(cloud_name))
+    print('cloud_name="{}"'.format(cloud_name))
 
     USERS_DIRS = ["Users", "Documents and Settings"]
 
@@ -551,7 +556,7 @@ class BLink:
         v = not_quoted(v, key=key)
         return v
 
-    def getExec(self, key='Exec'):
+    def getExec(self, key='Exec', split=None):
         '''Get Exec (or another key) from the blnk file.
 
         Be careful when filling in paths from cwd here. This function
@@ -560,18 +565,25 @@ class BLink:
 
         Args:
             key (str, optional): Key desired. Defaults to "Exec".
+            split (bool, optional): Whether to use shlex.split
+                to analyze it (for cross-platform corrections).
+                Defaults to False *unless* key is 'Path' then True.
 
         Returns:
-            str: value of Exec or other specified key. *Always* use
-                shlex.split on the return (if not None).
+            str: value of Exec or other specified key.
+                - *Always* use shlex.split on the return (if not None),
+                  even if Type is not "Application", because single
+                  quotes need to be removed!
         '''
-        prefix = "[getExec] "
+        prefix = "[getExec] "  # noqa: F841
+        if split is None:
+            split = (key == 'Exec')
         trySection = BLink.NO_SECTION
         section, v = self.getBranch(trySection, key)
         # Warning: don't remove quotes yet, because shlex.split
         #   is done later! Removing the quotes now would split more
         #   parts than should be.
-        echo0(prefix+"got v={}".format(v))
+        # print(prefix+"got v={}".format(v))
 
         if v is None:
             path = self.path
@@ -608,7 +620,6 @@ class BLink:
             # print("  [blnk] v: \"{}\"".format(v))
 
             if v[1:2] == ":":
-
                 # ^ Unless the leading slash is removed, join will
                 #   ignore the param before it (will treat it as
                 #   starting at the root directory)!
@@ -707,7 +718,7 @@ class BLink:
                                         BLink.cloud_name,
                                         case_sensitive=False)
 
-        echo0(prefix+"got path={}".format(path))
+        # print(prefix+"got path={}".format(path))
         if platform.system() == "Windows":
             # old_parts = shlex.split(path)
             # ^ removes backslashes \ !!
@@ -715,10 +726,18 @@ class BLink:
             old_parts = shlex.split(shlex.quote(path))
             for i in range(len(old_parts)):
                 old_parts[i] = old_parts[i].replace("\\\\", "\\")
+                if ((len(old_parts[i]) >= 2) and old_parts[i].startswith("'")
+                        and old_parts[i].endswith("'")):
+                    # Remove escaped and enclosing single quotes
+                    old_parts[i] = old_parts[i][1:-1]
+                    old_parts[i] = old_parts[i].replace("\\'", "'")
+                    # ^ replace it *2nd* since may end in
+                    #   literal `\` then bad `'` until bad `'`s are
+                    #   removed.
         else:
             old_parts = shlex.split(path)
 
-        echo0(prefix+"got old_parts={}".format(old_parts))
+        # print(prefix+"got old_parts={}".format(old_parts))
 
         # if not os.path.exists(old_parts[0]):
         abs0 = self.getAbs(old_parts[0])
@@ -728,13 +747,20 @@ class BLink:
                       " wasn't an existing absolute or relative path"
                       .format(old_parts[0]))
         old_parts[0] = abs0
-        path = shlex.join(old_parts)
+
+        # NOTE: Extra '' marks should *not* matter, since no_quotes is used
+        # if len(old_parts) == 1:
+        #     # Prevent adding extra '' marks
+        #     path = old_parts[0]
+        # else:
+        if split:
+            path = shlex.join(old_parts)
+
         # else:
         #    print('* using existing relative target "{}"'.format(old_parts))
 
         if path != v:
-            print("  [blnk] changed \"{}\" to"
-                  " \"{}\"".format(v, path))
+            print(prefix+"changed \"{}\" to \"{}\"".format(v, path))
         return path, None
 
     @staticmethod
@@ -883,22 +909,20 @@ class BLink:
 
     @staticmethod
     def _run(Exec, Type, cwd=None):
-        '''
+        '''Run the correct path using the Type variable from the blnk
         This is a static method, so any object attributes must be
         provided as arguments.
 
-        Run the correct path automatically using the Type variable from
-        the blnk file (Type can be Directory, File, OR Application).
         Note that the "Path" key sets the working directory NOT the
         target, but the Exec argument is equivalent to 'Exec'.
 
-        Sequential arguments:
-        Exec -- Should be the Exec value if Type is Application, Path if
-            a File or Directory, or URL if a Link.
-
-        Keyword arguments:
-        cwd -- Set this to the value of the 'Path' key if present to set
-            the current working directory in the subprocess.
+        Args:
+            Exec (str): Should be the Exec value if Type is Application,
+                Path if a File or Directory, or URL if a Link.
+            Type (str): "Directory", "File", OR "Application"
+            cwd (str, optional) Set this to the value of the 'Path' key
+                if present to set the current working directory in the
+                subprocess.
         '''
         echo1('* _run("{}", "{}", cwd="{}")'.format(Exec, Type, cwd))
         tryCmd = "geany"  # See `app` variable instead.
@@ -1064,8 +1088,7 @@ class BLink:
                 )
 
     def run(self):
-        '''
-        Run the BLink object.
+        '''Run the BLink object.
         '''
 
         '''
@@ -1087,6 +1110,7 @@ class BLink:
                 )
             return BLink._run(url, Type)
         source_key = 'Exec'
+        split = True
         if self.get('Type') in ["Directory", "File"]:
             old_v = self.get('Exec')
             try_v = self.get('Path')
@@ -1094,21 +1118,34 @@ class BLink:
                 # Created by a version of blnk >= 2022-11-02
                 # 1:00 PM ET
                 source_key = 'Path'
+                split = False
 
-        execStr, err = self.getExec(key=source_key)
+        execStr, err = self.getExec(key=source_key, split=split)
         # ^ Adds single quotes as necessary!
         # ^ Makes the path absolute
+        exec_parts = None
         if err is not None:
             echo0(err)
         if execStr is None:
             echo0("* Exec is None so choosing app...")
             return self._choose_app(self.path)
             # ^ Open the file itself since it is *not* in .blnk format.
-        elif self.get("Type") == "File":
-            execStr = not_quoted(execStr, key=source_key)
-            echo0("* Type=File so choosing app...")
-            return self._choose_app(execStr)
+        else:
+            # exec_parts = shlex.split(execStr)
+            # ^ Do *not* use (removes backslashes on Windows)
+            if source_key == 'Path':  # self.get("Type") == "File":
+                # execStr = not_quoted(execStr, key=source_key)
+                # execStr = exec_parts[0]  # removes backslashes
+                # if len(exec_parts) > 1:
+                #     raise ValueError("Extra parts (expected file for Exec,"
+                #                      " but got: {})".format(exec_parts))
+                echo0("* Type=File so choosing app...")
+                return self._choose_app(execStr)
         # else only Run the execStr itself if type is Application!
+
+        # ensure version with quotes etc. isn't used:
+        # del execStr
+
         # - However, _run detects Type=Directory and handles that.
         # echo0("Trying _run...")
         cwd, PathErr = self.getExec(key='Path')

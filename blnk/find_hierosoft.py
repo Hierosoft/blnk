@@ -26,15 +26,18 @@ nearbyRepo = os.path.join(MY_REPOS, REPO_NAME)
 
 
 def echo0(*args, **kwargs):
+    """ONLY Use for real errors in this program
+    (blnk.bat counts error lines)
+    """
     print(*args, file=sys.stderr, **kwargs)
 
 
 if os.path.isfile(os.path.join(nearbyRepo, MODULE_NAME, "__init__.py")):
     sys.path.insert(0, nearbyRepo)
-    echo0("[{}] using nearby {}".format(CALLER_NAME, nearbyRepo))
+    print("[{}] using nearby {}".format(CALLER_NAME, nearbyRepo))
 elif os.path.isdir(tryModule):
     sys.path.insert(0, tryRepo)
-    echo0("[{}] using git {}".format(CALLER_NAME, tryRepo))
+    print("[{}] using git {}".format(CALLER_NAME, tryRepo))
 else:
     pass
     # use the one in the python path (or fail)
