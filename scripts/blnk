@@ -10,5 +10,7 @@ if os.path.isdir(os.path.join(REPO_DIR, "scripts")):
     #   version should be used:
     sys.path.insert(0, REPO_DIR)
 
-from blnk import main
+from blnk import main  # noqa: E402
 
+if __name__ == "__main__":
+    sys.exit(main())
