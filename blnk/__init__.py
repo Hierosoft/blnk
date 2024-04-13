@@ -9,6 +9,7 @@ import platform
 import subprocess
 import pathlib
 import shlex
+import socket
 from datetime import (
     datetime,
     timezone,
@@ -136,6 +137,9 @@ Exec={Exec}
 [X-Target Metadata]
 modified={mtime}
 created={ctime}
+
+[X-Source Metadata]
+hostname={hostname}
 '''
 
 fileOrDirTemplate = '''[X-Blnk]
@@ -148,6 +152,9 @@ Path={Path}
 [X-Target Metadata]
 modified={mtime}
 created={ctime}
+
+[X-Source Metadata]
+hostname={hostname}
 '''
 
 blnkURLTemplate = '''[X-Blnk]
@@ -161,6 +168,9 @@ Icon=folder-remote
 
 [X-Target Metadata]
 accessed={accessed}
+
+[X-Source Metadata]
+hostname={hostname}
 '''
 
 '''
@@ -1357,7 +1367,10 @@ def create_shortcut_file(target, options, target_key='Exec'):
     Exec_fmt = "{}"
     if os.path.exists(target) and (" " in target):
         Exec_fmt = '"{}"'
-
+    # hostname = platform.node()
+    hostname = socket.gethostname()
+    # socket.gethostname() may be FQDN on Fedora (according to a comment
+    #   on <https://stackoverflow.com/a/4271755/4541104>).
     if options['Type'] in ["Directory", "File"]:
         # In XDG desktop format:
         # - The file extension would be ".directory" for a directory
@@ -1372,6 +1385,7 @@ def create_shortcut_file(target, options, target_key='Exec'):
             mtime=mtime,
             ctime=ctime,
             this_command=clean_shlex_join(sys.argv),
+            hostname=hostname,
         )
     elif target_key == 'Exec':
         content = blnkTemplate.format(
@@ -1382,6 +1396,7 @@ def create_shortcut_file(target, options, target_key='Exec'):
             mtime=mtime,
             ctime=ctime,
             this_command=clean_shlex_join(sys.argv),
+            hostname=hostname,
         )
     elif target_key == "URL":
         if options['Type'] != "Link":
@@ -1397,6 +1412,7 @@ def create_shortcut_file(target, options, target_key='Exec'):
             Terminal=options["Terminal"],
             accessed=accessed,
             this_command=clean_shlex_join(sys.argv),
+            hostname=hostname,
         )
     else:
         raise NotImplementedError("target_key={}".format(target_key))
