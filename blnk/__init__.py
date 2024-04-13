@@ -32,8 +32,10 @@ else:
     except ModuleNotFoundError:
         pass
 
-
-from find_hierosoft import hierosoft
+if __name__ == "__main__":
+    from find_hierosoft import hierosoft
+else:
+    from blnk.find_hierosoft import hierosoft
 
 from hierosoft import (
     echo0,
@@ -299,8 +301,10 @@ if os.path.isfile(tryBinPath):
 
 class BLink:
     '''
-    BASES is a list of paths that could contain the directory if the
-    directory is a drive letter that is not C but the os is not Windows.
+    Attributes:
+        BASES (list[str]): A list of paths that could contain the
+            directory if the directory is a drive letter that is not C
+            but the os is not Windows.
     '''
     NO_SECTION = "\n"
     BASES = [
@@ -765,23 +769,22 @@ class BLink:
 
     @staticmethod
     def _run_parts(parts, check=True, cwd=None, target_blnk_type=False):
-        '''
-        Run a command (list of command and args) directly using the best
-        call depending on the Python version.
+        '''Run a command (list of command and args) directly
+        using the best call depending on the Python version.
 
-        Keyword arguments:
-        cwd -- Change to this working directory first. This
-            should not usually be set to anything except the Path field
-            of a .blnk (or .desktop) file.
-            - Warning: A value other than None will cause subprocess to
-              FileNotFoundError for some reason if running
-              `['xdg-open', DirectoryPath]`.
-
-        is_blnk_type -- You can set this to True if the file type is
-            associated with blnk to prevent infinite recursion between
-            xdg-open and blnk.
-        check -- Set the "check" option of subprocess if available in
-            the version of Python that is running this module.
+        Args:
+            cwd (str, optional): Change to this working directory first.
+                This should not usually be set to anything except the
+                Path field of a .blnk (or .desktop) file.
+                - Warning: A value other than None will cause subprocess
+                  to FileNotFoundError for some reason if running
+                  `['xdg-open', DirectoryPath]`.
+            target_blnk_type (bool, optional): You can set this to True
+                if the file type is associated with blnk to prevent
+                infinite recursion between xdg-open and blnk.
+            check (bool, optional): Set the "check" option of subprocess
+                if available in the version of Python that is running
+                this module.
         '''
         if cwd is not None:
             if not_quoted(cwd) != cwd:
@@ -1013,8 +1016,8 @@ class BLink:
         return 1  # This should never happen.
 
     def _choose_app(self, path):
-        '''
-        Choose an application if either it isn't a blnk file at all or
+        '''Choose an application and run it.
+        if either it isn't a blnk file at all or
         Type is "File" (only use _run instead of _choose_app if Type is
         Application).
         '''
@@ -1118,11 +1121,20 @@ class BLink:
                 # Created by a version of blnk >= 2022-11-02
                 # 1:00 PM ET
                 source_key = 'Path'
+                # ^ blnk uses Path at least until
+                #   gitlab.freedesktop.org/xdg/xdg-utils/-/issues/210
+                #   is resolved.
                 split = False
 
         execStr, err = self.getExec(key=source_key, split=split)
         # ^ Adds single quotes as necessary!
         # ^ Makes the path absolute
+        if self.get('Type') in ["Directory", "File"]:
+            if not execStr:
+                raise KeyError("Missing {}".format(source_key))
+            if not os.path.exists(execStr):
+                raise FileNotFoundError("There is no {}"
+                                        "".format(execStr))
         exec_parts = None
         if err is not None:
             echo0(err)
@@ -1130,18 +1142,26 @@ class BLink:
             echo0("* Exec is None so choosing app...")
             return self._choose_app(self.path)
             # ^ Open the file itself since it is *not* in .blnk format.
+            #   (Not XDG, but see [The XDG desktop file spec alludes to
+            #   Directory as a Type of desktop file but doesn't define a
+            #   standard for
+            #   it.](gitlab.freedesktop.org/xdg/xdg-utils/-/issues/210)
         else:
             # exec_parts = shlex.split(execStr)
             # ^ Do *not* use (removes backslashes on Windows)
-            if source_key == 'Path':  # self.get("Type") == "File":
+            # if source_key == 'Path':  # comment since if Directory, run it
+            if self.get("Type") == "File":
                 # execStr = not_quoted(execStr, key=source_key)
                 # execStr = exec_parts[0]  # removes backslashes
                 # if len(exec_parts) > 1:
                 #     raise ValueError("Extra parts (expected file for Exec,"
                 #                      " but got: {})".format(exec_parts))
-                echo0("* Type=File so choosing app...")
+                echo0("* Type={} so choosing app...".format(Type))
+                # RETURN EARLY for file
                 return self._choose_app(execStr)
         # else only Run the execStr itself if type is Application!
+
+        # RETURNED already unless neither no Exec nor Type "File"
 
         # ensure version with quotes etc. isn't used:
         # del execStr
@@ -1156,9 +1176,13 @@ class BLink:
         else:
             echo1("* there is no PathErr from getExec(key='cwd') in run.")
             echo1('  - cwd="{}"'.format(cwd))
+
+        # Type is "Application" or "Directory" if we didn't return yet,
+        #   usually (neither missing Exec nor is Type "File").
+        #   - _run should split parts (for relative, see getExec)
+        #     *only if* Type is "Application"
+        #   - Type is detected automatically.
         return BLink._run(execStr, self.get('Type'), cwd=cwd)
-        # ^ _run should split parts (for relative, see getExec)
-        # ^ Type is detected automatically.
 
 
 dtLines = [
@@ -1229,14 +1253,24 @@ def run_file(path, options):
         # already handled by Blink
     except FileNotFoundError as ex:
         # echo0(get_traceback())
+        # msg = "The file was not found: {} {}".format(ex, get_traceback())
+        # msg = get_traceback()
+        # ^ Too long, has all lines of traceback, so:
+        msg = "{}: {}".format(type(ex).__name__, ex)
+        # ^ str(ex) already has path
         showMsgBoxOrErr(
-            "The file was not found: {} {}".format(ex, get_traceback()),
+            msg,
             try_gui=options['interactive'],
         )
-    except Exception as ex:
+    except Exception:
+        # This case ensures something is shown on the GUI *always*
+        #   since main may be run by a script associated with the
+        #   blnk filetype in the GUI.
         # msg = "Run couldn't finish: {}".format(ex)
+        # msg = "{}: {}".format(type(ex).__name__, ex)
+        msg = get_traceback()  # Show all lines since it isn't handled
         showMsgBoxOrErr(
-            get_traceback(),
+            msg,
             try_gui=options['interactive'],
         )
     # ^ IF commenting bare Exception, the caller must show output.
@@ -1399,8 +1433,9 @@ def name_from_url(url):
     return None
 
 
-def main(args):
+def main():
     # create_icon()
+    args = sys.argv
     if len(args) < 2:
         usage()
         raise ValueError(
@@ -1488,4 +1523,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main())
