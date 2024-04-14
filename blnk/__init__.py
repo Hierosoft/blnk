@@ -310,7 +310,7 @@ if os.path.isfile(tryBinPath):
 
 
 class BLink:
-    '''
+    '''Blink Link
     Attributes:
         BASES (list[str]): A list of paths that could contain the
             directory if the directory is a drive letter that is not C
@@ -363,11 +363,15 @@ class BLink:
         return path
 
     def splitLine(self, line, path=None, row=None):
-        '''
-        Keyword arguments:
-        path -- The source of the data (only for tracing errors).
-        row -- The source of the data in the file named path (only for
-            tracing errors).
+        '''Parse a blnk formatted line.
+
+        Args:
+            line (str): One line in blnk file format. It cannot be a
+                comment nor section heading.
+            path (str, optional): The source of the data (only for
+                tracing errors).
+            row (str, optional): The source of the data in the file
+                named path (only for tracing errors).
         '''
         i = line.find(self.assignmentOperator)
         if i < 0:
@@ -379,7 +383,8 @@ class BLink:
                     # ^ If iPlus2C == "\\", then the path may start with
                     # \\ (the start of a UNC network path).
                     self.assignmentOperator = ":"
-                    echo0("* reverting to deprecated ':' operator")
+                    echo0("* reverting to deprecated ':' operator for {}"
+                          "".format(line))
                     i = tmpI
                 else:
                     echo_SyntaxWarning(
@@ -428,12 +433,15 @@ class BLink:
     def isComment(self, line):
         return line.strip().startswith(self.commentDelimiter)
 
-    def _pushLine(self, rawL, row=None, col=None, path=None):
+    def _pushLine(self, rawL, path=None, row=None, col=None):
         '''
-        Keyword arguments
-        path -- Show this path in syntax messages.
-        row -- Show this row (such as line_index+1) in syntax messages.
-        col -- Show this col (such as char_index+1) in syntax messages.
+        Args:
+            rawL (str): a line in blnk format.
+            path (str, optional): Show this path in syntax messages.
+            row (int, optional): Show this row (such as line_index+1) in
+                syntax messages.
+            col (int, optional): Show this col (such as char_index+1) in
+                syntax messages.
         '''
         line = rawL.strip()
         if len(line) < 1:
@@ -541,11 +549,13 @@ class BLink:
             pass
 
     def getBranch(self, section, key):
-        '''
-        Get a tuple containing the section (section name key for
-        self.tree) and the value self.tree[section][key]. The reason
-        section is returned is in case the key doesn't exist there but
-        exists in another section.
+        '''Get the actual section and the value.
+
+        Returns:
+            tuple(str): section (section name key for self.tree) and
+                value self.tree[section][key]. The reason section is
+                returned is in case the key doesn't exist there but
+                exists in another section.
         '''
         v = None
         sectionD = self.tree.get(section)
@@ -584,7 +594,8 @@ class BLink:
                 Defaults to False *unless* key is 'Path' then True.
 
         Returns:
-            str: value of Exec or other specified key.
+            tuple(str): value of Exec or other specified key, then error
+                or None.
                 - *Always* use shlex.split on the return (if not None),
                   even if Type is not "Application", because single
                   quotes need to be removed!
@@ -617,18 +628,29 @@ class BLink:
             return None, msg
         path = v
 
+        if path.startswith("~/"):
+            if platform.system() == "Windows":
+                if split:
+                    shlex.split(path)
+                    # Only replace "/" in command
+                    #   (other args may be switches) if
+                    #   Type is "Application"
+                    path[0] = path[0].replace("/", "\\")
+                else:
+                    path = path.replace("/", "\\")
+            path = os.path.join(sysdirs['HOME'], path[2:])
+
         if platform.system() == "Windows":
             if v[1:2] == ":":
-                if v[2:3] != "\\":
+                if (len(v) > 2) and (v[2:3] != "\\"):
                     raise ValueError(
                         "The third character should be '\\' when the"
                         " 2nd character is ':', but the Exec value was"
                         " \"{}\"".format(v)
                     )
+                # elif == 2 allow drive letter shortcut without slash
 
         else:  # Not windows
-            if path.startswith("~/"):
-                path = os.path.join(sysdirs['HOME'], path[2:])
 
             # Rewrite Windows paths **when on a non-Windows platform**:
             # print("  [blnk] v: \"{}\"".format(v))
@@ -1243,13 +1265,14 @@ def create_icon(dtPath):
 
 
 def run_file(path, options):
-    '''
-    Sequential arguments:
-    options -- You must at least set:
-        'interactive': Try to show a tk messagebox for errors if True.
+    '''Run a blnk file.
+    Args:
+        options (dict): You must at least set:
+            'interactive': Try to show a tk messagebox for errors if
+            True.
 
     Returns:
-    If OK return 0, otherwise another int.
+        int: 0 if OK, otherwise there was an error.
     '''
     try:
         link = BLink(path)
@@ -1289,19 +1312,19 @@ def run_file(path, options):
 
 def create_shortcut_file(target, options, target_key='Exec'):
     '''
-    Sequential arguments:
-    options -- Define values for the shortcut using keys that are the same
-        names as used in XDG shortcut format. You must at least set:
-        'Terminal' (True will be changed to "true", False to "false"), 'Type',
-        'interactive': Try to show a tk messagebox for errors if True.
-        (Name will be generated from target's ending if None).
+    Args:
+        options (dict): Values for the shortcut using keys that are the
+            same names as used in XDG shortcut format. You must at least
+            set: 'Terminal' (True will be changed to "true", False to
+            "false"), 'Type', 'interactive': Try to show a tk messagebox
+            for errors if True. (Name will be generated from target's
+            ending if None).
 
-    Keyword arguments:
-    target_key -- Set this to 'URL' if targtet is a URL.
+        target_key (str, optional): Set to 'URL' if target is a URL.
+            Defaults to "Exec".
 
     Returns:
-    If OK return 0, otherwise another int.
-
+        int: 0 if OK, otherwise there was an error.
     '''
     valid_target_keys = ['Exec', "URL"]
     if target_key not in valid_target_keys:
