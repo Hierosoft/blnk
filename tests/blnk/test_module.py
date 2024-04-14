@@ -1,49 +1,44 @@
 #!/usr/bin/env python
 import os
+import sys
 
-print("")
-print("Starting tests...")
+TEST_MODULE_DIR = os.path.dirname(os.path.realpath(__file__))
+TESTS_DIR = os.path.dirname(TEST_MODULE_DIR)
+REPO_DIR = os.path.dirname(TESTS_DIR)
+TEST_DATA_DIR = os.path.join(TESTS_DIR, "data")
 
-from blnk import (
+
+if __name__ == "__main__":
+    sys.path.insert(0, REPO_DIR)
+
+
+from blnk import (  # noqa: E402
     BLink,
-    profile,
-    profiles,
-    username,
-    statedCloud,
-    myCloud,
+    # statedCloud,
 )
 
+from blnktestutils import testMatch  # noqa: E402
 
-docsBL = BLink(os.path.join("tests", "data", "documents.blnk"))
-profBL = BLink(os.path.join("tests", "data", "profile.blnk"))
-prosBL = BLink(os.path.join("tests", "data", "profiles.blnk"))
-gitsBL = BLink(os.path.join("tests", "data", "git.blnk"))
-owncBL = BLink(os.path.join("tests", "data", "owncloud.blnk"))
-ddocBL = BLink(os.path.join("tests", "data", "d_documents.blnk"))
-noC_BL = BLink(os.path.join("tests", "data", "c_does_not_exist.blnk"))
-noD_BL = BLink(os.path.join("tests", "data", "d_does_not_exist.blnk"))
+from hierosoft import sysdirs  # noqa: E402
+import hierosoft
+print("hierosoft.__file__={}".format(hierosoft.__file__))
+
+print("sysdirs={}".format(sysdirs))
+profiles = sysdirs['PROFILESFOLDER']
+profile = sysdirs['HOME']
+username = sysdirs['USER']
+myCloud = sysdirs['CLOUD']
+
+docsBL = BLink(os.path.join(TEST_DATA_DIR, "documents.blnk"))
+profBL = BLink(os.path.join(TEST_DATA_DIR, "profile.blnk"))
+prosBL = BLink(os.path.join(TEST_DATA_DIR, "profiles.blnk"))
+gitsBL = BLink(os.path.join(TEST_DATA_DIR, "git.blnk"))
+owncBL = BLink(os.path.join(TEST_DATA_DIR, "owncloud.blnk"))
+ddocBL = BLink(os.path.join(TEST_DATA_DIR, "d_documents.blnk"))
+noC_BL = BLink(os.path.join(TEST_DATA_DIR, "c_does_not_exist.blnk"))
+noD_BL = BLink(os.path.join(TEST_DATA_DIR, "d_does_not_exist.blnk"))
 
 
-def testMatch(got, correct, tb):
-    '''
-    Raise an exception when the compared values do not match.
-
-    Sequential arguments:
-    got -- Say what the function/method being tested actually got.
-    correct -- Say what the function/method should have returned.
-    tb -- Set a traceback or short description in a human-readable
-          form (such as a method name) for display when the check
-          doesn't match.
-    '''
-    if tb is None:
-        tb = ""
-    else:
-        tb = tb + " "
-    if got != correct:
-        raise ValueError("{}returned \"{}\" but should have returned \"{}\""
-                         "".format(tb, got, correct))
-    else:
-        print("* {} {} OK".format(tb, got))
 print("")
 print("Special folders:")
 print("profiles: {}".format(profiles))
@@ -51,21 +46,28 @@ print("profile: {}".format(profile))
 print("username: {}".format(username))
 print("")
 print("Substitutions:")
-testMatch(docsBL.getExec(), os.path.join(profile, "Documents"), "getExec")
-testMatch(profBL.getExec(), profile, "getExec")
-testMatch(prosBL.getExec(), profiles, "getExec")
-testMatch(gitsBL.getExec(), os.path.join(profile, "git"), "getExec")
-testMatch(owncBL.getExec(), os.path.join(profile, myCloud), "getExec")
+# getExec now returns tuple: (path, error)
+testMatch(docsBL.getExec(), (os.path.join(profile, "Documents"), None),
+          "getExec")
+testMatch(profBL.getExec(), (profile, None), "getExec")
+testMatch(prosBL.getExec(), (profiles, None), "getExec")
+testMatch(gitsBL.getExec(), (os.path.join(profile, "git"), None), "getExec")
+testMatch(owncBL.getExec(), (os.path.join(profile, myCloud), None), "getExec")
 myCloudPath = os.path.join(profile, myCloud)
 if os.path.isdir(myCloudPath):
-    testMatch(ddocBL.getExec(), os.path.join(myCloudPath, "Documents"), "getExec")
+    testMatch(ddocBL.getExec(), (os.path.join(myCloudPath, "Documents"), None),
+              "getExec {}".format(ddocBL.get('Exec')))
 else:
-    testMatch(ddocBL.getExec(), os.path.join(profile, "Documents"), "getExec")
+    testMatch(ddocBL.getExec(), (os.path.join(profile, "Documents"), None),
+              "getExec")
 gone = os.path.join(profile, "this", "path", "does", "not", "exist")
 if os.path.exists(gone):
-    raise RuntimeError("Uh, for this test to work, you can't actually have a file or directory called \"{}\".".format(gone))
-testMatch(noC_BL.getExec(), gone, "getExec")
-testMatch(noD_BL.getExec(), gone, "getExec")
+    raise RuntimeError(
+        "Uh, for this test to work,"
+        " you can't actually have a file"
+        " or directory called \"{}\".".format(gone))
+testMatch(noC_BL.getExec(), (gone, None), "getExec")
+testMatch(noD_BL.getExec(), (gone, None), "getExec")
 
 moreTests = "/home/owner/Desktop/blnk-files.txt"
 total = 0
@@ -83,7 +85,7 @@ if os.path.isfile(moreTests):
             parts = line.split(" ")
             if len(parts) >= 3:
                 if parts[-1].startswith("-"):
-                    if len(parts[-2]) >=8:
+                    if len(parts[-2]) >= 8:
                         if parts[-2][2] == ":" or parts[-2][1] == ":":
                             # There is no need to check for another
                             # colon, but it should be there if the time
