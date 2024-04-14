@@ -1164,9 +1164,11 @@ class BLink:
         if self.get('Type') in ["Directory", "File"]:
             if not execStr:
                 raise KeyError("Missing {}".format(source_key))
-            if not os.path.exists(execStr):
-                raise FileNotFoundError("There is no {}"
-                                        "".format(execStr))
+            if not os.path.exists(not_quoted(execStr)):
+                raise FileNotFoundError('There is no "{}"'
+                                        .format(execStr))
+            # Do *not change to not_quoted yet* though, or _run
+            #   will split it wrong if there are spaces!
         exec_parts = None
         if err is not None:
             echo0(err)
