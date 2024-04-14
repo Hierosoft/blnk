@@ -1,4 +1,4 @@
-def testMatch(got, correct, tb):
+def assert_equal(got, correct, tb):
     '''Raise an exception when the compared values do not match.
 
     Args:
@@ -10,12 +10,15 @@ def testMatch(got, correct, tb):
             human-readable form (such as a method name) for display when
             the check doesn't match.
     '''
+    # formerly testMatch, renamed so isn't a test
     if tb is None:
         tb = ""
     else:
         tb = tb + " "
     if got != correct:
-        raise ValueError("{}returned \"{}\" but should have returned \"{}\""
-                         "".format(tb, got, correct))
+        raise AssertionError(
+            "{}returned \"{}\" but should have returned \"{}\""
+            .format(tb, got, correct)
+        )
     else:
         print("* {} {} OK".format(tb, got))

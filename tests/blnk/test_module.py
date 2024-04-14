@@ -10,17 +10,20 @@ TEST_DATA_DIR = os.path.join(TESTS_DIR, "data")
 
 if __name__ == "__main__":
     sys.path.insert(0, REPO_DIR)
-
+else:
+    sys.path.insert(0, TEST_MODULE_DIR)
+    # ^ Allow importing blnktestutils from here.
 
 from blnk import (  # noqa: E402
     BLink,
     # statedCloud,
 )
 
-from blnktestutils import testMatch  # noqa: E402
+from blnktestutils import assert_equal  # noqa: E402
 
 from hierosoft import sysdirs  # noqa: E402
-import hierosoft
+import hierosoft  # noqa: E402
+
 print("hierosoft.__file__={}".format(hierosoft.__file__))
 
 print("sysdirs={}".format(sysdirs))
@@ -47,27 +50,30 @@ print("username: {}".format(username))
 print("")
 print("Substitutions:")
 # getExec now returns tuple: (path, error)
-testMatch(docsBL.getExec(), (os.path.join(profile, "Documents"), None),
-          "getExec")
-testMatch(profBL.getExec(), (profile, None), "getExec")
-testMatch(prosBL.getExec(), (profiles, None), "getExec")
-testMatch(gitsBL.getExec(), (os.path.join(profile, "git"), None), "getExec")
-testMatch(owncBL.getExec(), (os.path.join(profile, myCloud), None), "getExec")
+assert_equal(docsBL.getExec(), (os.path.join(profile, "Documents"), None),
+             "getExec")
+assert_equal(profBL.getExec(), (profile, None), "getExec")
+assert_equal(prosBL.getExec(), (profiles, None), "getExec")
+assert_equal(gitsBL.getExec(), (os.path.join(profile, "git"), None), "getExec")
+assert_equal(owncBL.getExec(), (os.path.join(profile, myCloud), None),
+             "getExec")
 myCloudPath = os.path.join(profile, myCloud)
 if os.path.isdir(myCloudPath):
-    testMatch(ddocBL.getExec(), (os.path.join(myCloudPath, "Documents"), None),
-              "getExec {}".format(ddocBL.get('Exec')))
+    # Testing translation of D:\ to ~/Nextcloud or other cloud
+    assert_equal(ddocBL.getExec(),
+                 (os.path.join(myCloudPath, "Documents"), None),
+                 "getExec {}".format(ddocBL.get('Exec')))
 else:
-    testMatch(ddocBL.getExec(), (os.path.join(profile, "Documents"), None),
-              "getExec")
+    assert_equal(ddocBL.getExec(), (os.path.join(profile, "Documents"), None),
+                 "getExec")
 gone = os.path.join(profile, "this", "path", "does", "not", "exist")
 if os.path.exists(gone):
     raise RuntimeError(
         "Uh, for this test to work,"
         " you can't actually have a file"
         " or directory called \"{}\".".format(gone))
-testMatch(noC_BL.getExec(), (gone, None), "getExec")
-testMatch(noD_BL.getExec(), (gone, None), "getExec")
+assert_equal(noC_BL.getExec(), (gone, None), "getExec")
+assert_equal(noD_BL.getExec(), (gone, None), "getExec")
 
 moreTests = "/home/owner/Desktop/blnk-files.txt"
 total = 0

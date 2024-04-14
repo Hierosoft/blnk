@@ -49,11 +49,7 @@ from hierosoft import (  # noqa: F401
 from hierosoft import (  # formerly blnk.morefolders
     replace_isolated,
     replace_vars,
-    localBinPath,
     sysdirs,
-    SHORTCUTS_DIR,
-    PROFILES,
-    temporaryFiles,
 )
 
 from hierosoft.morelogging import (
@@ -304,7 +300,7 @@ def showMsgBoxOrErr(msg,
 
 
 myBinPath = __file__
-tryBinPath = os.path.join(localBinPath, "blnk")
+tryBinPath = os.path.join(sysdirs['LOCAL_BIN'], "blnk")
 if os.path.isfile(tryBinPath):
     myBinPath = tryBinPath
 
@@ -316,7 +312,8 @@ class BLink:
             directory if the directory is a drive letter that is not C
             but the os is not Windows.
     '''
-    NO_SECTION = "\n"
+    SECTION_GLOBAL = "\n"  # formerly NO_SECTION
+    SECTION_BLINK = "X-Blnk"
     BASES = [
         sysdirs['HOME'],
     ]
@@ -329,7 +326,10 @@ class BLink:
         # if myCloud is None:
         #     myCloud = "Nextcloud"
         # os.path.join(sysdirs['HOME'], myCloud)
-        BASES.append(cloud_path)
+        BASES.insert(0, cloud_path)  # PREFER (place at [0]) since used for
+        #   when drive letter not C: and OS is *not* Windows
+        #   (may imply a Windows network drive, so other OS network
+        #   drive first on another OS.)
         cloud_name = os.path.split(cloud_path)[1]
     print('cloud_name="{}"'.format(cloud_name))
 
@@ -515,7 +515,7 @@ class BLink:
             '''
             section = self.lastSection
             if section is None:
-                section = BLink.NO_SECTION
+                section = BLink.SECTION_GLOBAL
             sectionD = self.tree.get(section)
             if sectionD is None:
                 sectionD = {}
@@ -571,7 +571,7 @@ class BLink:
         return section, v
 
     def get(self, key):
-        section = BLink.NO_SECTION
+        section = BLink.SECTION_GLOBAL
         got_section, v = self.getBranch(section, key)
         if got_section is None:
             # It is using the latest format.
@@ -603,7 +603,7 @@ class BLink:
         prefix = "[getExec] "  # noqa: F841
         if split is None:
             split = (key == 'Exec')
-        trySection = BLink.NO_SECTION
+        trySection = BLink.SECTION_BLINK  # formerly BLink.SECTION_GLOBAL
         section, v = self.getBranch(trySection, key)
         # Warning: don't remove quotes yet, because shlex.split
         #   is done later! Removing the quotes now would split more
@@ -619,7 +619,7 @@ class BLink:
             return None, msg
         elif section != trySection:
             sectionMsg = section
-            if section == BLink.NO_SECTION:
+            if section == BLink.SECTION_GLOBAL:
                 sectionMsg = "the main section"
             else:
                 sectionMsg = "[{}]".format(section)
@@ -661,11 +661,11 @@ class BLink:
                 #   starting at the root directory)!
                 # print("  v[1:2]: '{}'".format(v[1:2]))
                 if v.lower() == "c:\\tmp":
-                    path = temporaryFiles
-                    echo1("  [blnk] Detected {} as {}"
-                          "".format(v, temporaryFiles))
+                    path = sysdirs['TMP']
+                    echo1(prefix+"  [blnk] Detected {} as {}"
+                          "".format(v, sysdirs['TMP']))
                 elif v.lower().startswith("c"):
-                    echo1("  [blnk] Detected c: in {}"
+                    echo1(prefix+"  [blnk] Detected c: in {}"
                           "".format(v.lower()))
                     path = v[3:].replace("\\", "/")
                     rest = path
@@ -704,13 +704,13 @@ class BLink:
                         else:
                             path = sysdirs['HOME']
                     elif path.lower() == "users":
-                        path = PROFILES
+                        path = sysdirs['PROFILESFOLDER']
                     else:
                         path = os.path.join(sysdirs['HOME'], rest)
                         echo0("  [blnk] {} was forced due to bad path:"
                               " \"{}\".".format(path, v))
                 else:
-                    echo1("Detected drive letter that is not C:")
+                    echo0("Detected drive letter that is not C:")
                     # It starts with letter+colon but letter is NOT c.
                     path = v.replace("\\", "/")
                     rest = path[3:]
@@ -861,7 +861,7 @@ class BLink:
             part0 = which(parts[0])
             # if localPath not in os.environ["PATH"].split(os.pathsep):
             if part0 is None:
-                part0 = which(parts[0], more_paths=[localBinPath])
+                part0 = which(parts[0], more_paths=[sysdirs['LOCAL_BIN']])
                 if part0 is not None:
                     parts[0] = part0
         else:
@@ -870,7 +870,7 @@ class BLink:
                   "".format(sys.version_info.major))
             # check_call requires a full path (!):
             if not os.path.isfile(parts[0]):
-                part0 = which(parts[0], more_paths=[localBinPath])
+                part0 = which(parts[0], more_paths=[sysdirs['LOCAL_BIN']])
                 if part0 is not None:
                     parts[0] = part0
         completedprocess = None
@@ -1245,12 +1245,12 @@ def create_icon(dtPath):
     print("* checking for \"{}\"".format(dtPath))
     if not os.path.isfile(dtPath):
         print("* writing \"{}\"...".format(dtPath))
-        if not os.path.isdir(SHORTCUTS_DIR):
-            os.makedirs(SHORTCUTS_DIR)
+        if not os.path.isdir(sysdirs['SHORTCUTS']):
+            os.makedirs(sysdirs['SHORTCUTS'])
         with open(dtPath, 'w') as outs:
             for line in dtLines:
                 outs.write(line + "\n")
-        if not platform.system == "Windows":
+        if platform.system != "Windows":
             print("  - installing...")
             iconCommandParts = ["xdg-desktop-icon", "install",
                                 "--novendor"]
