@@ -27,18 +27,18 @@ if sys.version_info.major >= 3:
         pass
 else:
     try:
-        import Tkinter as tk
+        import Tkinter as tk  # type: ignore
         # import ttk
-        import tkMessageBox as messagebox
+        import tkMessageBox as messagebox  # type: ignore
     except ModuleNotFoundError:
         pass
 
 if __name__ == "__main__":
-    from find_hierosoft import hierosoft
+    from find_hierosoft import hierosoft  # noqa: F401
 else:
-    from blnk.find_hierosoft import hierosoft
+    from blnk.find_hierosoft import hierosoft  # noqa: F401
 
-from hierosoft import (
+from hierosoft import (  # noqa: F401
     echo0,
     echo1,
     echo2,
@@ -57,12 +57,12 @@ from hierosoft import (  # formerly blnk.morefolders
 )
 
 from hierosoft.morelogging import (
-    set_syntax_error_fmt,
-    to_syntax_error,
+    # set_syntax_error_fmt,
+    # to_syntax_error,
     echo_SyntaxWarning,
     raise_SyntaxError,
     get_traceback,
-    view_traceback,
+    # view_traceback,
 )
 
 # Handle issues where the OS considers "BLNK" and all of these file
@@ -271,7 +271,7 @@ def not_quoted(s, key=""):
             return s[1:-1].replace("\\"+q, q)
             break
         else:
-            echo0("using already not quoted: {}".format(key_msg, s))
+            echo0("using already not quoted {}: {}".format(key_msg, s))
     return s
 
 
@@ -1098,7 +1098,7 @@ class BLink:
             return BLink._run_parts(
                 cmd_parts,
                 cwd=cwd,
-                )
+            )
 
     def run(self):
         '''Run the BLink object.
@@ -1219,7 +1219,7 @@ def usage():
     print(__doc__)
 
 
-def create_icon():
+def create_icon(dtPath):
     print("* checking for \"{}\"".format(dtPath))
     if not os.path.isfile(dtPath):
         print("* writing \"{}\"...".format(dtPath))
@@ -1431,7 +1431,7 @@ def name_from_url(url):
     if sys.version_info.major >= 3:
         from urllib.parse import urlparse
     else:
-        from urlparse import urlparse
+        from urlparse import urlparse  # type: ignore
         # , parse_qs
     # parts = url.split('/')
     parseresult = urlparse(url)
@@ -1450,7 +1450,6 @@ def name_from_url(url):
 
 
 def main():
-    # create_icon()
     args = sys.argv
     if len(args) < 2:
         usage()
@@ -1531,6 +1530,7 @@ def main():
         return run_file(path, options)
     elif mode == MODE_CS:
         # Create shortcut
+        # create_icon()
         return create_shortcut_file(path, options, target_key=target_key)
     else:
         raise NotImplementedError("The mode \"{}\" is not known."

@@ -43,10 +43,8 @@ else:
     # use the one in the python path (or fail)
     # print("There is no {}".format(os.path.join(thisRepo, MODULE_NAME)))
 
-import hierosoft
-
 try:
-    import hierosoft
+    import hierosoft  # noqa: F401
 except ImportError as ex:
     echo0("sys.path={}".format(sys.path))
     echo0(str(ex))

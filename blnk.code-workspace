@@ -7,6 +7,10 @@
 	"settings": {
 		"rewrap.wrappingColumn": 72,
 		"autoDocstring.docstringFormat": "google",
-		"editor.wordWrapColumn": 79
+		"editor.wordWrapColumn": 79,
+		"files.trimFinalNewlines": true,
+		"flake8.args": [
+			"--ignore=E226,N802,N803,N806,N813,N816"
+		]
 	}
 }
