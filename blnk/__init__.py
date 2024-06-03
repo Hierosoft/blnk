@@ -8,14 +8,21 @@ import os
 import platform
 import subprocess
 import pathlib
-import shlex
+import shlex  # See shlex.join polyfill further down in case of Python 2
 import socket
-from datetime import (
-    datetime,
-    timezone,
-)
 
 if sys.version_info.major >= 3:
+    import datetime
+    from datetime import timezone
+    try:
+        timezone_utc = timezone.utc
+        # ^ "ModuleNotFoundError: No module named 'datetime.timezone';
+        #   'datetime' is not a package"
+    except ModuleNotFoundError:
+        print("sys.path={}".format(sys.path), file=sys.stderr)
+        print("sys.version_info={}".format(sys.version_info),
+              file=sys.stderr)
+        raise
     try:
         import tkinter as tk
         # from tkinter import ttk
@@ -26,12 +33,21 @@ if sys.version_info.major >= 3:
     except ModuleNotFoundError:
         pass
 else:
+    ModuleNotFoundError = ImportError
+    FileNotFoundError = IOError
+    from pytz import timezone
+    from pytz import utc as timezone_utc
     try:
         import Tkinter as tk  # type: ignore
         # import ttk
         import tkMessageBox as messagebox  # type: ignore
     except ModuleNotFoundError:
         pass
+
+from datetime import (
+    datetime,  # import this *after* "from datetime" imports!
+)
+
 
 if __name__ == "__main__":
     from find_hierosoft import hierosoft  # noqa: F401
@@ -60,6 +76,30 @@ from hierosoft.morelogging import (
     get_traceback,
     # view_traceback,
 )
+
+# Below is copied from a hierosoft comment
+#   (shlex_join appears to not be in six, though shlex_quote is.
+#   See feature request https://github.com/benjaminp/six/issues/386)
+if sys.version_info.major > 3 and sys.version_info.minor >= 8:
+    shlex_join = shlex.join
+    shlex_quote = shlex.quote
+else:
+    import pipes
+    shlex_quote = pipes.quote
+
+    def shlex_join(parts):
+        result = ""
+        sep = ""
+        for part in parts:
+            result += sep
+            sep = " "
+            if (" " in part) or ('"' in part):
+                result += '"%s"' % part.replace('"', '\\"')
+            else:
+                result += part
+        return result
+    shlex.join = shlex_join
+
 
 # Handle issues where the OS considers "BLNK" and all of these file
 #   extensions as "text/plain" rather than allowing them to be
@@ -241,7 +281,7 @@ def clean_shlex_join(parts):
     For example, sys.argv may start with
     ["/home/user/git/blnk/blnk/__init__.py", "--non-interactive"].
     """
-    parts = parts.copy()
+    parts = list(parts)
     if parts[0].endswith("__init__.py"):
         parts[0] = "blnk"
     if parts[1] == "--non-interactive":
@@ -759,7 +799,7 @@ class BLink:
             # old_parts = shlex.split(path)
             # ^ removes backslashes \ !!
             #   https://github.com/mesonbuild/meson/issues/5726
-            old_parts = shlex.split(shlex.quote(path))
+            old_parts = shlex.split(shlex_quote(path))
             for i in range(len(old_parts)):
                 old_parts[i] = old_parts[i].replace("\\\\", "\\")
                 if ((len(old_parts[i]) >= 2) and old_parts[i].startswith("'")
@@ -1362,9 +1402,9 @@ def create_shortcut_file(target, options, target_key='Exec'):
     if os.path.isfile(target) or os.path.isdir(target):
         echo1('Using target: "{}"'.format(target))
         mtime_ts = pathlib.Path(target).stat().st_mtime
-        mtime = datetime.fromtimestamp(mtime_ts, tz=timezone.utc)
+        mtime = datetime.fromtimestamp(mtime_ts, tz=timezone_utc)
         ctime_ts = pathlib.Path(target).stat().st_ctime
-        ctime = datetime.fromtimestamp(ctime_ts, tz=timezone.utc)
+        ctime = datetime.fromtimestamp(ctime_ts, tz=timezone_utc)
         # ^ stat raises FileNotFoundError if not os.path.exists
         # TODO: test both on mac, and if necessary use
         #   os.stat(target).st_birthtime "To get file creation time on Mac
@@ -1374,7 +1414,7 @@ def create_shortcut_file(target, options, target_key='Exec'):
         As per <https://blog.ganssle.io/articles/2019/11/utcnow.html
         :~:text=timestamp()%20method%20gives%20a,
         time%2C%20even%20if%20you%20originally>:
-        tz=timezone.utc correctly (in Python 3 only?) makes the
+        tz=timezone_utc correctly (in Python 3 only?) makes the
         output utilize timezone. For example:
         str(mtime) output (during DST):
         2022-08-09 14:39:55.144246
@@ -1429,7 +1469,7 @@ def create_shortcut_file(target, options, target_key='Exec'):
                 "The type for target URL should be Link but is {}"
                 "".format(options['Type'])
             )
-        accessed = datetime.now(tz=timezone.utc)
+        accessed = datetime.now(tz=timezone_utc)
         content = blnkURLTemplate.format(
             Type=options["Type"],
             Name=options["Name"],
