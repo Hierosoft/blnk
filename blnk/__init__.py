@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
 
-# See __doc__ further down for documentation.
+# DOCSTRING: See __doc__ further down for documentation.
 
 from __future__ import print_function
-import sys
+
+import argparse
 import os
-import platform
-import subprocess
 import pathlib
+import platform
 import shlex  # See shlex.join polyfill further down in case of Python 2
 import socket
+import subprocess
+import sys
 
 if sys.version_info.major >= 3:
+    # shlex_quote: See further down
     import datetime
     from datetime import timezone
     try:
@@ -44,7 +47,7 @@ else:
     except ModuleNotFoundError:
         pass
 
-from datetime import (
+from datetime import (  # noqa: F811
     datetime,  # import this *after* "from datetime" imports!
 )
 
@@ -62,7 +65,7 @@ from hierosoft import (  # noqa: F401
     which,
 )
 
-from hierosoft import (  # formerly blnk.morefolders
+from hierosoft import (
     replace_isolated,
     replace_vars,
     sysdirs,
@@ -85,7 +88,7 @@ if sys.version_info.major > 3 and sys.version_info.minor >= 8:
     shlex_quote = shlex.quote
 else:
     import pipes
-    shlex_quote = pipes.quote
+    shlex_quote = pipes.quote  # Slated for removal in Python 3.13
 
     def shlex_join(parts):
         result = ""
@@ -224,22 +227,23 @@ In XDG Format:
 '''
 
 __doc__ = '''
-Blnk (pronounced "blink") makes or runs a shortcut to a file or
-directory.
+Blnk
+----
+(pronounced "blink")
+Make or run a shortcut to a file, directory, or URL,
+storing the access time and other helpful information
+about the target.
 
 The blnk format is (based on the XDG .desktop file format):
 {Template}
+
+Cross-platform environment variables can be used, such as
+`%USERPROFILE%`, `$HOME`, or `~`.
 
 
 If you run such a file and blnk runs it in a text editor, the problem
 is that the first line must be the Content-Type line shown (It is case
 sensitive), and there must not be any blank line before it.
-
-
-Options:
--s                Create a shortcut to the given file.
---terminal        Specify "Terminal=true" in the blnk file to indicate
-                    that the 'Exec' file should run in a Terminal.
 
 The following examples assume you've already made a symlink to blnk.py
 as ~/.local/bin/blnk (and that ~/.local/bin is in your path--otherwise,
@@ -247,22 +251,14 @@ make the symlink as /usr/local/bin/blnk instead. On windows, make a
 batch file that runs blnk and sends the parameters to it).
 
 Create a shortcut:
-blnk -s %SOME_PATH%
+blnk -s <target> [<destination shortcut file>]
 
-Where %SOME_PATH% is a full path to a blnk file without the
-symbols. The new .blnk file will appear in the current working directory
-and the name will be the same as the given filename but with the
-extension changed to ".blnk".
-
-
-Run a shortcut:
-blnk %SOME_BLNK_FILE%
-
-Where %SOME_BLNK_FILE% is a full path to a blnk file without the
-symbols.
-
+Examples:
+# Run a shortcut:
+blnk <blnk file>
+# Where <blnk file> is a path to a blnk file.
 '''.format(Template=blnkTemplate)
-
+# ^ OPTIONS: moved to parser (now parser.print_usage() is called by usage)
 
 # - Type is "Directory" or "File"
 # - Name may be shown in the OS but usually isn't (from XDG .desktop
@@ -270,6 +266,7 @@ symbols.
 # - Exec is the path to actually run (a directory or file). Environment
 #   variables are allowed (with the symbols shown):
 #   - %USERPROFILES%
+
 
 class FileTypeError(Exception):
     pass
@@ -1269,9 +1266,9 @@ dtLines = [
 ]
 '''
 ^ dtLines is for generating an XDG desktop file for launching blnk itself so
-  that blnk appears in the "Choose Applicaton" menu for opening a .blnk file,
+  that blnk appears in the "Choose Application" menu for opening a .blnk file,
   and doesn't represent the content of a .blnk file itself (though blnk format
-  is based on the XDG desktop shorcut format).
+  is based on the XDG desktop shortcut format).
 '''
 #
 #   Don't set NoDisplay:true or it can't be seen in the "Open With" menu
@@ -1279,8 +1276,12 @@ dtLines = [
 #   - This is for blnk itself. For blnk files, see blnkTemplate.
 
 
-def usage():
+def usage(parser=None):
+    # if parser:
+    #     parser.print_help()  # prints the full help screen
     print(__doc__)
+    if parser:
+        parser.print_usage()  # prints only usage
 
 
 def create_icon(dtPath):
@@ -1515,63 +1516,97 @@ def name_from_url(url):
 
 
 def main():
-    args = sys.argv
-    if len(args) < 2:
-        usage()
-        raise ValueError(
-            "Error: The first argument is the program but"
-            " there is no argument after that. Provide a"
-            " file path."
-        )
+    parser = argparse.ArgumentParser(
+        prog="blnk",
+        description="Create or read a .blnk (\"Blink\") shortcut.\n\n"+__doc__,
+        # add_help=__doc__,
+        # usage=__doc__
+        formatter_class=argparse.RawTextHelpFormatter,  # allow \n in usage
+    )
+    parser.add_argument("-s", "--shortcut", action='store_true')
+    target_required = "--shortcut" in sys.argv
+    if "-s" in sys.argv:
+        target_required = True
+    target_help = "blnk to run, or target in shortcut creation mode."
+    if target_required:
+        parser.add_argument('target', help=target_help)
+    else:
+        parser.add_argument('target', help=target_help, nargs="?")
+        # , default=None)
+    parser.add_argument(
+        'name', nargs="?",  # default=None,
+        help=("Name of the file (If not specified, name of file will be used,"
+              " or will fail if is a URL)."
+              " The \".blnk\" extension will be added automatically."))
+    parser.add_argument(
+        "-y", "--non-interactive", action='store_true',
+        help=("Force non-interactive mode (no GUI dialogs nor terminal"
+              " input prompt if information is incorrect or missing).")
+    )
+    # or action=argparse.BooleanOptionalAction (Python 3.9)
+    parser.add_argument("-c", "--terminal",
+                        help=("The target is a console application"
+                              " (or should run in a terminal using"
+                              " Terminal=true in the blnk file regardless)."))
+    # NOTE: Use -c since -t means something else with ln
+    # (--target-directory=DIRECTORY)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-v", "--verbose")
+    group.add_argument("-V", "--debug")
+
+    args = parser.parse_args()
+
     MODE_RUN = "run"
     MODE_CS = "create shortcut"
     mode = MODE_RUN
     path = None
     options = {}
-    options["interactive"] = True
-    options["Terminal"] = "false"
-    for i in range(1, len(args)):
-        arg = args[i]
-        if arg == "-s":
-            mode = MODE_CS
-        elif arg == "--terminal":
-            options["Terminal"] = "true"
-        elif arg in ["--non-interactive", "-y"]:
-            options["interactive"] = False
-        elif arg == "--verbose":
-            set_verbosity(1)
-        elif arg == "--debug":
-            set_verbosity(2)
-        elif arg.startswith("--"):
-            echo0('The argument "{}" is invalid.'.format(arg))
-            return 1
-        else:
-            if path is None:
-                path = arg
-            elif options.get('Name') is None:
-                options['Name'] = arg
-                echo0('Name="{}"'.format(options['Name']))
-            else:
-                raise ValueError("The option \"{}\" is unknown and the"
-                                 " path was already \"{}\""
-                                 "".format(arg, path))
-    if path is None:
-        usage()
-        echo0("Error: The path was not set (args={}).".format(args))
-        return 1
+    options["interactive"] = not args.non_interactive
+    options["Terminal"] = "true" if args.terminal else "false"
+    # NOTE: verbosity = 2  # 2 to mimic Python 3 logging default WARNING==30
+    if args.verbose:
+        set_verbosity(3)
+    elif args.debug:
+        set_verbosity(4)
+    if args.shortcut:
+        mode = MODE_CS
+    path = args.target
+
     options["Type"] = None
     target_key = 'Exec'
     if os.path.isdir(path):
         options["Type"] = "Directory"
+        if mode == MODE_RUN:
+            usage(parser=parser)
+            error = ("Can't run a directory, and -s was not specified.\nUse `blnk -s <path>`"
+                     "\nto create a Directory shortcut.")
+            showMsgBoxOrErr(error, try_gui=options["interactive"])
+            return 1
     elif os.path.isfile(path):
         options["Type"] = "File"
     elif is_url(path):
+        if mode == MODE_RUN:
+            usage(parser=parser)
+            error = ("Can't run a URL, and -s was not specified.\nUse `blnk -s <URL> <Title>`"
+                     "\nto create a URL shortcut.")
+            showMsgBoxOrErr(error, try_gui=options["interactive"])
+            return 1
+        elif options.get("Terminal"):
+            usage(parser=parser)
+            error = "A URL should not run in a terminal."
+            showMsgBoxOrErr(error, try_gui=options["interactive"])
+            return 1
+        # if not URL either: See after this case
         options["Type"] = "Link"
         target_key = "URL"
         if options.get('Name') is None:
             options['Name'] = name_from_url(path)
         if options.get('Name') is None:
             echo1("got: {}".format(sys.argv))
+            # escaped_path = shlex_quote(path)
+            # has_special = escaped_path != "'%s'" % path
+            # NOTE: ^ shlex_quote won't work, since & separates the rest
+            #   into a different command if using bash!
             amp_msg = ('If the URL has an ampersand, quote the URL\n'
                        ' to prevent the URL from cutting off such as\n'
                        ' if that is not the complete URL you entered'
@@ -1586,7 +1621,7 @@ def main():
     if options["Type"] is None:
         usage()
         showMsgBoxOrErr(
-            "Error: The path \"{}\" is not a file or directory"
+            "Error: The path \"{}\" is not a file, directory, nor URL"
             " (args={}).".format(path, args),
             try_gui=options["interactive"],
         )
