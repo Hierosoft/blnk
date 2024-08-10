@@ -1380,11 +1380,24 @@ def create_shortcut_file(target, options, target_key='Exec'):
         if target.endswith(os.path.sep):
             target = target[:-len(os.path.sep)]
         # echo1('Using target: "{}"'.format(target))
-        options["Name"] = os.path.splitext(os.path.split(target)[-1])[0]
-        # ^ Also should be done to calculate options['Name'] before
-        #   calling this function if done automatically.
+        if os.path.isfile(target):
+            options["Name"] = os.path.splitext(os.path.split(target)[-1])[0]
+            # ^ Also should be done to calculate options['Name'] before
+            #   calling this function if done automatically.
+        elif os.path.isdir(target):
+            # Do not remove ".*" from a folder name
+            #   (otherwise ".dir" would become "" and
+            #   "cron.daily" would become "cron")!
+            options["Name"] = os.path.split(target)[-1]
+    else:
+        print("Using specified name=\"{}\"".format(options['Name']))
+
     newName = options["Name"] + ".blnk"
     newPath = newName
+    _, name = os.path.split(newPath)
+    if name.startswith("."):
+        print("Warning: creating hidden file {}".format(newPath),
+              file=sys.stderr)
     if options.get('Type') is None:
         raise KeyError("Type is required.")
     if options.get('Terminal') is None:
@@ -1571,7 +1584,7 @@ def main():
     if args.shortcut:
         mode = MODE_CS
     path = args.target
-
+    options["Name"] = args.name
     options["Type"] = None
     target_key = 'Exec'
     if os.path.isdir(path):
