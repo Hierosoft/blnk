@@ -11,6 +11,29 @@
 		"files.trimFinalNewlines": true,
 		"flake8.args": [
 			"--ignore=E226,N802,N803,N806,N813,N816"
+		],
+		"cSpell.words": [
+			"atril",
+			"birthtime",
+			"blnk",
+			"Caja",
+			"flatpak",
+			"freedesktop",
+			"geany",
+			"gethostname",
+			"hierosoft",
+			"kdbx",
+			"keepassxc",
+			"Minetest",
+			"morelogging",
+			"Nextcloud",
+			"novendor",
+			"owncloud",
+			"Poikilos",
+			"pytz",
+			"qpdfview",
+			"startfile",
+			"sysdirs"
 		]
 	}
 }
