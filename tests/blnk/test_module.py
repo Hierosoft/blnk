@@ -32,14 +32,14 @@ profile = sysdirs['HOME']
 username = sysdirs['USER']
 myCloud = sysdirs['CLOUD']
 
-docsBL = BLink(os.path.join(TEST_DATA_DIR, "documents.blnk"))
-profBL = BLink(os.path.join(TEST_DATA_DIR, "profile.blnk"))
-prosBL = BLink(os.path.join(TEST_DATA_DIR, "profiles.blnk"))
-gitsBL = BLink(os.path.join(TEST_DATA_DIR, "git.blnk"))
-owncBL = BLink(os.path.join(TEST_DATA_DIR, "owncloud.blnk"))
-ddocBL = BLink(os.path.join(TEST_DATA_DIR, "d_documents.blnk"))
-noC_BL = BLink(os.path.join(TEST_DATA_DIR, "c_does_not_exist.blnk"))
-noD_BL = BLink(os.path.join(TEST_DATA_DIR, "d_does_not_exist.blnk"))
+docsBL = BLink(path=os.path.join(TEST_DATA_DIR, "documents.blnk"))
+profBL = BLink(path=os.path.join(TEST_DATA_DIR, "profile.blnk"))
+prosBL = BLink(path=os.path.join(TEST_DATA_DIR, "profiles.blnk"))
+gitsBL = BLink(path=os.path.join(TEST_DATA_DIR, "git.blnk"))
+owncBL = BLink(path=os.path.join(TEST_DATA_DIR, "owncloud.blnk"))
+ddocBL = BLink(path=os.path.join(TEST_DATA_DIR, "d_documents.blnk"))
+noC_BL = BLink(path=os.path.join(TEST_DATA_DIR, "c_does_not_exist.blnk"))
+noD_BL = BLink(path=os.path.join(TEST_DATA_DIR, "d_does_not_exist.blnk"))
 
 
 print("")
@@ -115,7 +115,7 @@ if os.path.isfile(moreTests):
                 continue
             print("[tests] Testing \"{}\":".format(line))
             tests += 1
-            testBL = BLink(line)
+            testBL = BLink(path=line)
             Exec = testBL.getExec()
             if not os.path.exists(Exec):
                 print("  [tests] {}: WARNING: \"{}\" did not exist."

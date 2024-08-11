@@ -39,7 +39,7 @@ if %code% neq 0 (
     echo "[blnk.bat] error nonzero return code %code%
     REM BAD Count lines in err.log
     REM for /f %%A in ('find /v /c "" ^< "%logsDir%\err.log"') do set "err_line_count=%%A"
-    
+
     REM NOTE: Using %% is only necessary in a batch file. To test it live, use only % not %%
     REM   (See <https://stackoverflow.com/questions/9311562/a-was-unexpected-at-this-time>)
     echo err_line_count=%err_line_count%
