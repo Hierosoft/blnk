@@ -351,7 +351,8 @@ class BLink:
     LINE_ACTIONS = ["ContentType", "Sections", "Values", "Top"]  # comment is N/A
 
     def __init__(self, path=None, assignmentOperator="=",
-                 commentDelimiter="#", load=True):
+                 commentDelimiter="#", load=True,
+                 blnk_format_only=True):
         self.contentType = None
         self.contentTypeParts = None
         self.lastSection = None
@@ -376,7 +377,7 @@ class BLink:
         if load:
             # raise_more (TypeError) since we are certain it *should be* a
             # blnk file by now (prevents running the file using the OS!)
-            self.load(path, blnk_format_only=True)
+            self.load(path, blnk_format_only=blnk_format_only)
         else:
             self.path = path
 
@@ -477,6 +478,9 @@ class BLink:
         else:
             self._comments["Top"].append(comment)
 
+    def is_blnk(self):
+        self.contentType == "text/blnk"
+
     def _pushLine(self, rawL, path=None, row=None, col=None):
         '''
         Args:
@@ -512,8 +516,9 @@ class BLink:
                 value = values[0]
                 self.contentType = value
                 self.contentTypeParts = values
-        if self.contentType != "text/blnk":
+        if not self.is_blnk():
             logger.warning("* running non-blnk file directly")
+            # NOTE: FileTypeError tells load to _choose_app
             raise FileTypeError(
                 "The file must contain \"Content-Type:\""
                 " (usually \"Content-Type: text/blnk\")"
@@ -1796,11 +1801,18 @@ def run_file(path, enable_gui=True):
         int: 0 if OK, otherwise there was an error.
     '''
     try:
-        link = BLink(path)
+        link = BLink(path, blnk_format_only=False)
         # ^ This path is the blnk file, not its target.
-        link.run()
+        # if link.path:
+        #     link.run()
+        # else it is not recognized blnk format (constructor runs load,
+        # and in that case, load runs _choose_app)!
         # ^ init and run are in the same context in case construct
         #   fails.
+        # New way:
+        if link.is_blnk():
+            link.run()
+        # else load already ran _choose_app
         return 0
     except FileTypeError:
         pass
