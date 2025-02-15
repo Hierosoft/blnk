@@ -551,20 +551,11 @@ class BLink:
         elif trySection is not None:
             section = trySection
             if len(section) < 1:
-                pre = ""  # This is a comment prefix for debugging.
-                if row is not None:
-                    if self.path is not None:
-                        pre = self.path + ":"
-                        if row is not None:
-                            pre += str(row) + ":"
-                            if col is not None:
-                                pre += str(col) + ":"
-                if len(pre) > 0:
-                    pre += " "
-                raise raise_SyntaxError(
+                raise_SyntaxError(
                     path,
                     row,
-                    pre+"_pushLine got an empty section",
+                    "_pushLine got an empty section",
+                    col=col,
                 )
             else:
                 self.lastSection = section
@@ -596,6 +587,11 @@ class BLink:
                 sectionD = OrderedDict()
                 self.tree[section] = sectionD
             sectionD[k] = v
+            if k == "Type":
+                # handled by self.target_type property
+                logger.debug("target_type is {}".format(self.target_type))
+                logger.debug("target_key is {}".format(self.target_key))
+                assert self.target_type == v
             logger.debug(
                 "SET {}.{}={}".format(
                     section.replace(BLink.SECTION_GLOBAL, "GLOBAL"), k, v))
@@ -747,7 +743,7 @@ class BLink:
                     "Refusing to overwrite non-blnk file \"{}\"!"
                     .format(path))
         if os.path.exists(path) and not overwrite:
-            echo0("Error: {} already exists.".format(path))
+            echo0("Error: {} already exists.".format(repr(path)))
             return 1
 
         with open(path, 'w') as outs:
@@ -831,7 +827,7 @@ class BLink:
         error = (
             "Error: {} already exists."
             " Use --update to run analyze_metadata instead."
-            .format(blnk_path))
+            .format(repr(blnk_path)))
 
         if options['Type'] in ["Directory", "File"]:
             if not os.path.exists(target):
@@ -982,10 +978,21 @@ class BLink:
         mtime = None
         ctime = None
         echo1('Using target: "{}"'.format(target))
-        mtime_ts = pathlib.Path(target).stat().st_mtime
-        mtime = datetime.fromtimestamp(mtime_ts, tz=timezone_utc)
-        ctime_ts = pathlib.Path(target).stat().st_ctime
-        ctime = datetime.fromtimestamp(ctime_ts, tz=timezone_utc)
+        if os.path.exists(target):
+            mtime_ts = pathlib.Path(target).stat().st_mtime
+            mtime = datetime.fromtimestamp(mtime_ts, tz=timezone_utc)
+            ctime_ts = pathlib.Path(target).stat().st_ctime
+            ctime = datetime.fromtimestamp(ctime_ts, tz=timezone_utc)
+        else:
+            if target_key != "URL":
+                logger.warning(
+                    "{} ({}) does not exist. Not annotating shortcut"
+                    " with target creation or modification date."
+                    .format(target, target_key))
+            mtime_ts = None
+            mtime = None
+            ctime_ts = None
+            ctime = None
         # ^ stat raises FileNotFoundError if not os.path.exists
         # TODO: test both on mac, and if necessary use
         #   os.stat(target).st_birthtime "To get file creation time on Mac
@@ -2044,6 +2051,8 @@ def main():
 
     if mode == MODE_UPDATE:
         # Do not check target
+        # Type be loaded rather than fall back to
+        # target_key "Exec" Type None though
         pass
     elif os.path.isdir(target):
         options["Type"] = "Directory"
@@ -2115,7 +2124,7 @@ def main():
                     raise NotImplementedError("Missing valid Type after load")
                 if not link.target:
                     raise NotImplementedError("Missing target after load")
-
+                target_key = link.target_key
                 # Redo the analyze process
                 #   (usually done during set_target during create):
                 results = link.analyze_target(
