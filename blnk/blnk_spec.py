@@ -22,7 +22,7 @@ REQUIREMENTS and DEFAULTS:
   - 'Exec': For making a File shortcut. formerly blnk.blnkTemplate
   - 'File' and "Directory": For making a File or Directory shortcut
     (formerly blnk.fileOrDirTemplate)
-  - 'URL': For making a URL shortcut. formerly blnk.blnkURLTemplate
+  - 'URL': For making a Link shortcut. formerly blnk.blnkURLTemplate
 - REQUIREMENTS and DEFAULTS are not for blnk files, and not blnk itself.
   For installing a shortcut to blnk itself (required for easily setting
   it as the default program for the mimetype), see __init__.py (dtLines
@@ -39,7 +39,7 @@ from collections import OrderedDict
 
 REQUIREMENTS = {}  # Values None (for easy copy), keys required
 DEFAULTS = {}
-for exec_type in ("Exec", "File", "Directory", "URL"):
+for exec_type in ("Exec", "File", "Directory", "Link"):
     REQUIREMENTS[exec_type] = OrderedDict()
     REQUIREMENTS[exec_type]["X-Blnk"] = OrderedDict()
     REQUIREMENTS[exec_type]["X-Blnk"]["Type"] = None
@@ -53,7 +53,7 @@ REQUIREMENTS["Exec"]["X-Blnk"]["Exec"] = None
 REQUIREMENTS["Exec"]["X-Blnk"]["Terminal"] = None
 REQUIREMENTS["Directory"]["X-Blnk"]["Path"] = None
 REQUIREMENTS["File"]["X-Blnk"]["Path"] = None
-REQUIREMENTS["URL"]["X-Blnk"]["URL"] = None
+REQUIREMENTS["Link"]["X-Blnk"]["URL"] = None
 
 REQUIREMENTS["Exec"]["X-Target Metadata"]["created"] = None
 REQUIREMENTS["Exec"]["X-Target Metadata"]["modified"] = None
@@ -61,13 +61,13 @@ REQUIREMENTS["Directory"]["X-Target Metadata"]["created"] = None
 REQUIREMENTS["Directory"]["X-Target Metadata"]["modified"] = None
 REQUIREMENTS["File"]["X-Target Metadata"]["created"] = None
 REQUIREMENTS["File"]["X-Target Metadata"]["modified"] = None
-REQUIREMENTS["URL"]["X-Target Metadata"]["accessed"] = None
+REQUIREMENTS["Link"]["X-Target Metadata"]["accessed"] = None
 
-for exec_type in ("Exec", "File", "Directory", "URL"):
+for exec_type in ("Exec", "File", "Directory", "Link"):
     DEFAULTS[exec_type] = copy.deepcopy(REQUIREMENTS[exec_type])
     DEFAULTS[exec_type]["X-Blnk"]["NoDisplay"] = True
 
-DEFAULTS["URL"]["X-Blnk"]["Icon"] = "folder-remote"
+DEFAULTS["Link"]["X-Blnk"]["Icon"] = "folder-remote"
 
 EXAMPLE_DATA = "```"
 for section, meta in DEFAULTS["Exec"].items():
@@ -87,5 +87,5 @@ TARGET_MAP = {
     "Exec": "Exec",
     "Directory": "Path",
     "File": "Path",
-    "URL": "URL",
+    "Link": "URL",
 }

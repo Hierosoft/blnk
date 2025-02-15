@@ -479,7 +479,7 @@ class BLink:
             self._comments["Top"].append(comment)
 
     def is_blnk(self):
-        self.contentType == "text/blnk"
+        return self.contentType == "text/blnk"
 
     def _pushLine(self, rawL, path=None, row=None, col=None):
         '''
@@ -501,6 +501,10 @@ class BLink:
                       " \"{}\" section which was still present."
                       "".format(line, self.lastSection))
         isContentTypeLine = False
+        content_type_mapping = {
+            "[X-Blnk]": "text/blnk",
+            "Content-Type: text/blnk": "text/blnk",
+        }
         if line == "[X-Blnk]":
             isContentTypeLine = True
             value = "text/blnk"
@@ -516,6 +520,10 @@ class BLink:
                 value = values[0]
                 self.contentType = value
                 self.contentTypeParts = values
+        if not isContentTypeLine and self.contentType != "text/blnk":
+            logger.warning("Unexpected line before {}: {}"
+                           .format(list(content_type_mapping.keys()),
+                                   repr(line)))
         if not self.is_blnk():
             logger.warning("* running non-blnk file directly")
             # NOTE: FileTypeError tells load to _choose_app
@@ -834,7 +842,7 @@ class BLink:
             error += (" However, this will not work with {} since"
                       " it is not an existing plain executable file."
                       .format(target))
-        elif options['Type'] == "URL":
+        elif options['Type'] == "Link":
             error += (" However, this will not work with {}"
                       " since it is not a File nor Directory."
                       .format(target))
@@ -856,7 +864,7 @@ class BLink:
                 ending if None).
             enable_gui (bool, optional): Try to show a tk messagebox
                 for errors if True.
-            target_key (str, optional): Set to 'URL' if target is a URL.
+            target_key (str, optional): Set to 'URL' if target is a Link.
                 Defaults to "Exec".
         """
         results = {}
@@ -877,8 +885,8 @@ class BLink:
                 .format(target))
 
         if options["Type"] not in TARGET_MAP:
-            raise ValueError("Type should be among: {}"
-                             .format(list(TARGET_MAP.keys())))
+            raise ValueError("Type should be in: {} but got {}"
+                             .format(list(TARGET_MAP.keys()), options["Type"]))
         valid_target_key = TARGET_MAP[options["Type"]]
         if target_key != valid_target_key:
             warning = (
@@ -940,12 +948,18 @@ class BLink:
         # INFO: The included shortcut will redirect stderr (then show
         # the log at the end if not empty).
 
-        if os.path.isfile(target) or os.path.isdir(target):
-            self.analyze_target(options, target_key=target_key,
-                                enable_gui=enable_gui, target=target)
-        else:
-            raise FileNotFoundError(
-                "load_target can only work with existing files.")
+        # if os.path.isfile(target) or os.path.isdir(target):
+        self.analyze_target(options, target_key=target_key,
+                            enable_gui=enable_gui, target=target)
+        # ^ analyze_target allows URL target_key now.
+        # elif options["Type"] != "Link":
+        #     print("Skipping target analysis since Type=Link.")
+        # else:
+        #     print("Skipping target analysis, no file/folder {}"
+        #           .format(repr(target)))
+        #     raise FileNotFoundError(
+        #         "load_target can only work with existing files.")
+        # NOTE: "accessed" is set elsewhere
         self.path = newPath
         if not self.path:
             raise NotImplementedError("self.path was not generated")
@@ -1891,7 +1905,6 @@ def dump_args(args):
     print("- resulting manually-set members:", file=sys.stderr)
     print("  - args.target={}".format(args.target), file=sys.stderr)
     print("  - args.name={}".format(args.name), file=sys.stderr)
-    print("args.terminal={}".format(args.terminal), file=sys.stderr)
     print("args.non_interactive={}".format(args.non_interactive),
           file=sys.stderr)
     print("args.update={}".format(args.update), file=sys.stderr)
@@ -1964,7 +1977,8 @@ def main():
     MODE_UPDATE = "update shortcut"
     options = {}
     enable_gui = not args.non_interactive
-    options["Terminal"] = "true" if args.terminal else "false"
+    print("args.terminal={}".format(repr(args.terminal)))
+    options["Terminal"] = True if args.terminal else False  # converted to lowercase on save
     # NOTE: verbosity = 2  # 2 to mimic Python 3 logging default WARNING==30
     if args.verbose:
         set_verbosity(3)
@@ -2015,7 +2029,7 @@ def main():
             usage(parser=parser)
             error = ("Can't run a URL, and -s was not specified.\n"
                      "Use `blnk -s '<URL>' \"<Title>\"`"
-                     "\nto create a URL shortcut.")
+                     "\nto create a Link shortcut.")
             showMsgBoxOrErr(error, enable_gui=enable_gui)
             return 1
         elif os.path.isdir(shortcut):
@@ -2041,7 +2055,8 @@ def main():
             # already returned if so
         elif options.get("Terminal"):
             usage(parser=parser)
-            error = "A URL should not run in a terminal."
+            error = ("A URL should not have Terminal enabled (Terminal={})."
+                     .format(options.get('Terminal')))
             showMsgBoxOrErr(error, enable_gui=enable_gui)
             return 1
         # if not URL either: See after this case
