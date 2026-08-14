@@ -106,7 +106,7 @@ logger = getLogger(__name__)
 # Below is copied from a hierosoft comment
 #   (shlex_join appears to not be in six, though shlex_quote is.
 #   See feature request https://github.com/benjaminp/six/issues/386)
-if sys.version_info.major > 3 and sys.version_info.minor >= 8:
+if sys.version_info.major >= 3 and sys.version_info.minor >= 8:
     shlex_join = shlex.join
     shlex_quote = shlex.quote
 else:
@@ -1654,15 +1654,32 @@ class BLink:
             #   (with or without an nja, but not the nja file directly).
         logger.warning("    - app={}".format(app))
         if cmd_parts is None:
-            return BLink._run_parts(
-                [app] + more_parts + [path],
-                cwd=cwd,
-            )
+            # cmd_parts = [app] + more_parts + [path]
+            # echo0(f"Running default command parts: {cmd_parts}")
+            # return BLink._run_parts(
+            #     cmd_parts,
+            #     cwd=cwd,
+            # )
+            echo0("Opening default application for: {}".format(path))
+            return BLink.open_in_default_app(path)
         else:
             return BLink._run_parts(
                 cmd_parts,
                 cwd=cwd,
             )
+
+    @staticmethod
+    def open_in_default_app(path):
+        if path.lower().endswith(".blnk"):
+            error = "Tried to open shortcut itself. Infinite recursion blocked"
+            messagebox.showerror("BLink", error)
+            raise ValueError(error)
+        if platform.system() == "Windows":
+            os.startfile(path)
+        elif platform.system() == "Darwin":
+            subprocess.call(("open", path))
+        else:
+            subprocess.call(("xdg-open", path))
 
     def run(self):
         '''Run the BLink object.
